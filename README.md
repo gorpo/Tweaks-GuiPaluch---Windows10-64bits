@@ -4,7 +4,7 @@ Painel portátil para Windows 10 64 bits com atalhos de manutenção, downloads 
 
 ## Recursos
 
-- Interface dark em Tkinter.
+- Interface dark em Tkinter com menu lateral e painel de funcoes.
 - Executável único e portátil.
 - Solicita administrador ao abrir.
 - Ações para Microsoft Defender, limpeza de temporários, rede, SFC, DISM, energia e ferramentas do Windows.

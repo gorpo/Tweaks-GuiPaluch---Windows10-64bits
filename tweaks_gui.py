@@ -17,14 +17,16 @@ from tkinter import filedialog, messagebox, scrolledtext, ttk
 
 
 APP_TITLE = "Tweaks GuiPaluch"
-BG = "#0f172a"
+BG = "#0b1020"
+SIDEBAR = "#0f172a"
 PANEL = "#111827"
-PANEL_2 = "#1f2937"
+PANEL_2 = "#172033"
 TEXT = "#e5e7eb"
-MUTED = "#9ca3af"
+MUTED = "#94a3b8"
 ACCENT = "#38bdf8"
-BUTTON = "#243244"
-BUTTON_ACTIVE = "#334155"
+ACCENT_2 = "#22d3ee"
+BUTTON = "#1f2a3d"
+BUTTON_ACTIVE = "#29384f"
 DESKTOP = Path.home() / "Desktop"
 DEFAULT_BACKUP_DIR = Path(r"D:\TweaksGuiPaluchBackups")
 CONFIG_DIR = Path(os.environ.get("APPDATA", DESKTOP)) / "TweaksGuiPaluch"
@@ -543,8 +545,8 @@ class TweaksApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(APP_TITLE)
-        self.geometry("1100x760")
-        self.minsize(760, 560)
+        self.geometry("1180x760")
+        self.minsize(780, 540)
         self.configure(bg=BG)
         self._set_icon()
         self._apply_theme()
@@ -573,24 +575,27 @@ class TweaksApp(tk.Tk):
         self.style.configure(".", background=BG, foreground=TEXT, fieldbackground=PANEL)
         self.style.configure("TFrame", background=BG)
         self.style.configure("Panel.TFrame", background=PANEL)
+        self.style.configure("Sidebar.TFrame", background=SIDEBAR)
         self.style.configure("TLabel", background=BG, foreground=TEXT)
         self.style.configure("Muted.TLabel", background=BG, foreground=MUTED)
-        self.style.configure("Title.TLabel", background=BG, foreground=TEXT, font=("Segoe UI", 22, "bold"))
+        self.style.configure("Title.TLabel", background=BG, foreground=TEXT, font=("Segoe UI", 19, "bold"))
+        self.style.configure("SidebarTitle.TLabel", background=SIDEBAR, foreground=ACCENT_2, font=("Segoe UI", 11, "bold"))
+        self.style.configure("SidebarMuted.TLabel", background=SIDEBAR, foreground=MUTED, font=("Segoe UI", 9))
         self.style.configure("Section.TLabel", background=PANEL, foreground=ACCENT, font=("Segoe UI", 12, "bold"))
         self.style.configure(
             "TButton",
             background=BUTTON,
             foreground=TEXT,
-            bordercolor="#334155",
+            bordercolor="#26364d",
             lightcolor=BUTTON,
             darkcolor=BUTTON,
             focusthickness=1,
             focuscolor=ACCENT,
-            padding=(12, 9),
+            padding=(13, 10),
         )
         self.style.map(
             "TButton",
-            background=[("active", BUTTON_ACTIVE), ("pressed", "#0ea5e9")],
+            background=[("active", BUTTON_ACTIVE), ("pressed", "#0284c7")],
             foreground=[("disabled", MUTED), ("active", "#ffffff")],
         )
         self.style.configure(
@@ -614,7 +619,7 @@ class TweaksApp(tk.Tk):
         self.style.configure("Vertical.TScrollbar", background=PANEL_2, troughcolor=BG, arrowcolor=TEXT)
 
     def _build_ui(self):
-        header = ttk.Frame(self, padding=(18, 16, 18, 8))
+        header = ttk.Frame(self, padding=(16, 12, 16, 6))
         header.pack(fill="x")
 
         title = ttk.Label(header, text=APP_TITLE, style="Title.TLabel")
@@ -624,16 +629,49 @@ class TweaksApp(tk.Tk):
         admin = ttk.Label(header, text=admin_text, style="Muted.TLabel")
         admin.pack(side="right")
 
-        main = ttk.Frame(self, padding=(18, 8, 18, 8))
+        main = ttk.Frame(self, padding=(14, 8, 14, 8))
         main.pack(fill="both", expand=True)
 
-        self.notebook = ttk.Notebook(main)
-        self.notebook.pack(fill="both", expand=True)
+        shell = ttk.Frame(main)
+        shell.pack(fill="both", expand=True)
+
+        sidebar = ttk.Frame(shell, style="Sidebar.TFrame", padding=(10, 10, 10, 10), width=190)
+        sidebar.pack(side="left", fill="y", padx=(0, 10))
+        sidebar.pack_propagate(False)
+
+        ttk.Label(sidebar, text="MENU", style="SidebarTitle.TLabel").pack(anchor="w", pady=(0, 2))
+        ttk.Label(sidebar, text="rotinas e ferramentas", style="SidebarMuted.TLabel").pack(anchor="w", pady=(0, 10))
+
+        self.nav_list = tk.Listbox(
+            sidebar,
+            activestyle="none",
+            bg=SIDEBAR,
+            fg=TEXT,
+            selectbackground="#0ea5e9",
+            selectforeground="#ffffff",
+            highlightthickness=1,
+            highlightbackground="#1e293b",
+            highlightcolor=ACCENT,
+            borderwidth=0,
+            relief="flat",
+            font=("Segoe UI", 10, "bold"),
+            exportselection=False,
+        )
+        self.nav_list.pack(fill="both", expand=True)
+        self.nav_list.bind("<<ListboxSelect>>", self._on_nav_select)
+
+        right = ttk.Frame(shell)
+        right.pack(side="left", fill="both", expand=True)
+
+        self.pages = {}
+        self.current_page = None
+        self.content_area = ttk.Frame(right, style="Panel.TFrame")
+        self.content_area.pack(fill="both", expand=True)
 
         self.log = scrolledtext.ScrolledText(
-            main,
+            right,
             wrap="word",
-            height=10,
+            height=8,
             font=("Consolas", 10),
             bg="#020617",
             fg=TEXT,
@@ -641,13 +679,16 @@ class TweaksApp(tk.Tk):
             relief="flat",
             borderwidth=0,
         )
-        self.log.pack(fill="both", expand=False, pady=(12, 0))
+        self.log.pack(fill="both", expand=False, pady=(10, 0))
         self.log.insert("end", "Logs aparecerao aqui.\n")
 
-        status = ttk.Label(self, textvariable=self.status_var, padding=(18, 7), style="Muted.TLabel")
+        status = ttk.Label(self, textvariable=self.status_var, padding=(16, 7), style="Muted.TLabel")
         status.pack(fill="x")
 
         self._add_sections()
+        if self.pages:
+            first_page = next(iter(self.pages))
+            self._show_page(first_page)
 
     def _add_sections(self):
         cleanup = self._tab("Limpeza")
@@ -865,8 +906,9 @@ class TweaksApp(tk.Tk):
         ])
 
     def _tab(self, title):
-        outer = ttk.Frame(self.notebook, padding=0, style="Panel.TFrame")
-        self.notebook.add(outer, text=title)
+        outer = ttk.Frame(self.content_area, padding=0, style="Panel.TFrame")
+        self.pages[title] = outer
+        self.nav_list.insert("end", "  " + title)
 
         canvas = tk.Canvas(outer, highlightthickness=0, bg=PANEL)
         scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
@@ -905,6 +947,28 @@ class TweaksApp(tk.Tk):
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         return inner
+
+    def _on_nav_select(self, event):
+        selection = self.nav_list.curselection()
+        if not selection:
+            return
+        raw_title = self.nav_list.get(selection[0])
+        self._show_page(raw_title.strip())
+
+    def _show_page(self, title):
+        if title not in self.pages:
+            return
+        if self.current_page:
+            self.pages[self.current_page].pack_forget()
+        self.pages[title].pack(fill="both", expand=True)
+        self.current_page = title
+
+        for index in range(self.nav_list.size()):
+            if self.nav_list.get(index).strip() == title:
+                self.nav_list.selection_clear(0, "end")
+                self.nav_list.selection_set(index)
+                self.nav_list.activate(index)
+                break
 
     def _section(self, parent, title, buttons):
         label = ttk.Label(parent, text=title, style="Section.TLabel")
