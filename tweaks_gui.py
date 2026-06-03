@@ -502,6 +502,7 @@ class TweaksApp(tk.Tk):
         self._section(folders, "Menu Iniciar e atalhos", [
             ("Menu Iniciar do usuario", lambda: self.run_task(open_target, str(USER_START_MENU))),
             ("Menu Iniciar todos usuarios", lambda: self.run_task(open_target, str(COMMON_START_MENU))),
+            ("Atualizar Menu Iniciar", self.restart_explorer),
             ("Inicializar com Windows usuario", lambda: self.run_task(open_target, str(USER_STARTUP))),
             ("Inicializar com Windows todos", lambda: self.run_task(open_target, str(COMMON_STARTUP))),
             ("Enviar para", lambda: self.run_task(open_target, str(SEND_TO))),
