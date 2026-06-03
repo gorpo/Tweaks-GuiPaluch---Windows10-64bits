@@ -37,6 +37,17 @@ COMMON_STARTUP = COMMON_START_MENU / "Startup"
 SEND_TO = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "SendTo"
 QUICK_LAUNCH = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Internet Explorer" / "Quick Launch"
 HOSTS_FILE = Path(r"C:\Windows\System32\drivers\etc\hosts")
+SAVED_GAMES = Path.home() / "Saved Games"
+MY_GAMES = Path.home() / "Documents" / "My Games"
+STEAM_USERDATA = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Steam" / "userdata"
+STEAM_COMMON = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Steam" / "steamapps" / "common"
+EPIC_PROGRAMDATA = Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData")) / "Epic"
+ROCKSTAR_DOCUMENTS = Path.home() / "Documents" / "Rockstar Games"
+BATTLE_NET_PROGRAMDATA = Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData")) / "Battle.net"
+DIRECTX_SHADER_CACHE = Path(os.environ.get("LOCALAPPDATA", "")) / "D3DSCache"
+AMD_SHADER_CACHE = Path(os.environ.get("LOCALAPPDATA", "")) / "AMD" / "DxCache"
+AMD_GL_CACHE = Path(os.environ.get("LOCALAPPDATA", "")) / "AMD" / "GLCache"
+WINDOWS_CRASH_DUMPS = Path(os.environ.get("LOCALAPPDATA", "")) / "CrashDumps"
 MINECRAFT_BACKUP_ITEMS = [
     "saves",
     "mods",
@@ -174,6 +185,20 @@ def quick_temp_prefetch_cleanup():
     return "\n\n".join(results)
 
 
+def clear_extra_caches():
+    targets = [
+        ("DirectX Shader Cache", DIRECTX_SHADER_CACHE),
+        ("AMD DxCache", AMD_SHADER_CACHE),
+        ("AMD GLCache", AMD_GL_CACHE),
+        ("Crash Dumps do usuario", WINDOWS_CRASH_DUMPS),
+    ]
+
+    results = []
+    for label, path in targets:
+        results.append(f"--- {label} ---\n{remove_contents(path)}")
+    return "\n\n".join(results)
+
+
 def clear_browser_cache_paths():
     paths = [
         Path(os.environ.get("LOCALAPPDATA", "")) / "Google" / "Chrome" / "User Data" / "Default" / "Cache",
@@ -189,6 +214,167 @@ def clear_browser_cache_paths():
         results.append(remove_contents(path))
 
     return "\n\n".join(results) if results else "Nenhum cache de navegador encontrado."
+
+
+def zip_existing_items(zip_name, base, items):
+    backup_dir = ensure_backup_dir()
+    zip_path = backup_dir / f"{zip_name}-{timestamp()}.zip"
+    base = Path(base)
+    included = 0
+    missing = []
+
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+        for item in items:
+            source = base / item
+            if not source.exists():
+                missing.append(str(source))
+                continue
+            if source.is_dir():
+                for file in source.rglob("*"):
+                    if file.is_file():
+                        archive.write(file, file.relative_to(base))
+                        included += 1
+            else:
+                archive.write(source, source.relative_to(base))
+                included += 1
+
+    details = [f"Backup criado:\n{zip_path}", f"Arquivos incluidos: {included}"]
+    if missing:
+        details.append("Itens nao encontrados:")
+        details.extend(missing)
+    return "\n".join(details)
+
+
+def backup_folder_contents(label, folder):
+    folder = Path(folder)
+    if not folder.exists():
+        return f"Pasta nao encontrada: {folder}"
+
+    backup_dir = ensure_backup_dir()
+    zip_path = backup_dir / f"{label}-{timestamp()}.zip"
+    included = 0
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+        for file in folder.rglob("*"):
+            if file.is_file():
+                archive.write(file, file.relative_to(folder.parent))
+                included += 1
+    return f"Backup criado:\n{zip_path}\nArquivos incluidos: {included}"
+
+
+def backup_start_menu_shortcuts():
+    backup_dir = ensure_backup_dir()
+    zip_path = backup_dir / f"start-menu-shortcuts-{timestamp()}.zip"
+    included = 0
+    roots = [("usuario", USER_START_MENU), ("todos-usuarios", COMMON_START_MENU)]
+
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+        for label, root in roots:
+            if not root.exists():
+                continue
+            for file in root.rglob("*"):
+                if file.is_file():
+                    archive.write(file, Path(label) / file.relative_to(root))
+                    included += 1
+    return f"Backup do Menu Iniciar criado:\n{zip_path}\nArquivos incluidos: {included}"
+
+
+def backup_post_format_bundle():
+    backup_dir = ensure_backup_dir()
+    report = [export_pc_profile()]
+    report.append(backup_start_menu_shortcuts())
+    report.append(backup_folder_contents("desktop-backup", DESKTOP))
+    if MINECRAFT_DIR.exists():
+        report.append(backup_minecraft_modding_only())
+
+    checklist = backup_dir / f"checklist-pos-formatacao-{timestamp()}.txt"
+    checklist.write_text(
+        "\n\n".join([
+            "Checklist pos-formatacao Tweaks GuiPaluch",
+            "1. Instalar driver AMD RX580 primeiro estavel ou Forza6, conforme necessidade.",
+            "2. Instalar Java 8/17/21 para Minecraft e modding.",
+            "3. Restaurar atalhos do Menu Iniciar se necessario.",
+            "4. Restaurar backups de Minecraft/mods/saves.",
+            "5. Conferir apps de inicializacao, privacidade, plano de energia e tela.",
+            "6. Criar ponto de restauracao depois que tudo estiver ajustado.",
+        ]),
+        encoding="utf-8",
+    )
+    report.append(f"Checklist criado:\n{checklist}")
+    return "\n\n".join(report)
+
+
+def minecraft_clean_logs_and_cache():
+    targets = [
+        ("logs", MINECRAFT_DIR / "logs"),
+        ("crash-reports", MINECRAFT_DIR / "crash-reports"),
+        (".mixin.out", MINECRAFT_DIR / ".mixin.out"),
+        ("cache", MINECRAFT_DIR / "cache"),
+    ]
+    results = []
+    for label, path in targets:
+        results.append(f"--- {label} ---\n{remove_contents(path)}")
+    return "\n\n".join(results)
+
+
+def minecraft_latest_crash_report():
+    reports = MINECRAFT_DIR / "crash-reports"
+    if not reports.exists():
+        return "Pasta crash-reports nao encontrada."
+
+    files = sorted([p for p in reports.glob("*.txt") if p.is_file()], key=lambda p: p.stat().st_mtime, reverse=True)
+    if not files:
+        return "Nenhum crash report encontrado."
+
+    latest = files[0]
+    try:
+        os.startfile(str(latest))
+    except Exception:
+        pass
+    return f"Crash report mais recente:\n{latest}"
+
+
+def list_minecraft_mods():
+    mods_dir = MINECRAFT_DIR / "mods"
+    if not mods_dir.exists():
+        return "Pasta mods nao encontrada."
+
+    mods = sorted([p.name for p in mods_dir.glob("*.jar")])
+    output = ensure_backup_dir() / f"minecraft-mods-{timestamp()}.txt"
+    output.write_text("\n".join(mods), encoding="utf-8")
+    return f"Mods encontrados: {len(mods)}\nLista salva em:\n{output}"
+
+
+def java_versions_report():
+    return "\n\n".join([
+        "=== where java ===",
+        run_command("where java", shell=True),
+        "=== java -version ===",
+        run_command("java -version", shell=True),
+        "=== Program Files Java/Temurin ===",
+        run_powershell("Get-ChildItem 'C:\\Program Files','C:\\Program Files (x86)' -Directory -ErrorAction SilentlyContinue | Where-Object {$_.Name -match 'Java|Eclipse|Temurin|Adoptium'} | Select-Object FullName | Format-Table -AutoSize"),
+    ])
+
+
+def miracast_diagnostics():
+    return "\n\n".join([
+        "=== Miracast / Wi-Fi driver ===",
+        run_command(["netsh", "wlan", "show", "drivers"]),
+        "=== Adaptadores de rede ===",
+        run_powershell("Get-NetAdapter | Select-Object Name,InterfaceDescription,Status,LinkSpeed,MacAddress | Format-Table -AutoSize"),
+        "=== Configuracao de rede ===",
+        run_command(["ipconfig"]),
+    ])
+
+
+def network_diagnostics():
+    gateway = run_powershell("(Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1 -ExpandProperty NextHop)", timeout=30).splitlines()
+    gateway = gateway[0].strip() if gateway else ""
+    parts = [run_command(["ipconfig"])]
+    if gateway and "Codigo de saida" not in gateway:
+        parts.append(f"=== Ping gateway {gateway} ===\n{run_command(['ping', '-n', '4', gateway], timeout=30)}")
+    parts.append("=== Ping Google DNS ===\n" + run_command(["ping", "-n", "4", "8.8.8.8"], timeout=30))
+    parts.append("=== Ping google.com ===\n" + run_command(["ping", "-n", "4", "google.com"], timeout=30))
+    return "\n\n".join(parts)
 
 
 def timestamp():
@@ -467,6 +653,7 @@ class TweaksApp(tk.Tk):
         cleanup = self._tab("Limpeza")
         self._section(cleanup, "Arquivos temporarios e caches", [
             ("Limpeza rapida: Temp + %TEMP% + Prefetch", lambda: self.run_task(quick_temp_prefetch_cleanup)),
+            ("Limpar shader/cache AMD + DirectX", self.confirm_clear_extra_caches),
             ("Limpar C:\\Windows\\Temp", lambda: self.run_task(remove_contents, r"C:\Windows\Temp")),
             ("Limpar %TEMP%", lambda: self.run_task(remove_contents, tempfile.gettempdir())),
             ("Limpar Prefetch", lambda: self.run_task(remove_contents, r"C:\Windows\Prefetch")),
@@ -495,6 +682,9 @@ class TweaksApp(tk.Tk):
             ("Configuracoes de projecao", lambda: self.run_task(open_target, "ms-settings:project")),
             ("Adicionar dispositivo Bluetooth/tela", lambda: self.run_task(open_target, "ms-settings:bluetooth")),
             ("Configuracoes de tela", lambda: self.run_task(open_target, "ms-settings:display")),
+            ("Abrir Win+P / projetar", lambda: self.run_task(open_target, "DisplaySwitch.exe")),
+            ("Diagnostico Miracast/Wi-Fi", lambda: self.run_task(miracast_diagnostics)),
+            ("Diagnostico de internet", lambda: self.run_task(network_diagnostics)),
             ("Resetar rede", self.reset_network),
         ])
 
@@ -527,6 +717,15 @@ class TweaksApp(tk.Tk):
             ("Windows Temp", lambda: self.run_task(open_target, r"C:\Windows\Temp")),
             ("Prefetch", lambda: self.run_task(open_target, r"C:\Windows\Prefetch")),
         ])
+        self._section(folders, "Jogos e saves", [
+            ("Saved Games", lambda: self.run_task(open_target, str(SAVED_GAMES))),
+            ("Documents\\My Games", lambda: self.run_task(open_target, str(MY_GAMES))),
+            ("Steam userdata", lambda: self.run_task(open_target, str(STEAM_USERDATA))),
+            ("Steam games/common", lambda: self.run_task(open_target, str(STEAM_COMMON))),
+            ("Epic ProgramData", lambda: self.run_task(open_target, str(EPIC_PROGRAMDATA))),
+            ("Rockstar Documents", lambda: self.run_task(open_target, str(ROCKSTAR_DOCUMENTS))),
+            ("Battle.net ProgramData", lambda: self.run_task(open_target, str(BATTLE_NET_PROGRAMDATA))),
+        ])
 
         repair = self._tab("Reparo")
         self._section(repair, "Windows e disco", [
@@ -534,11 +733,18 @@ class TweaksApp(tk.Tk):
             ("Reparar imagem do Windows (DISM)", self.dism_restore),
             ("Verificar disco", self.check_disk),
             ("Otimizar unidades", lambda: self.run_task(open_target, "dfrgui")),
+            ("Gerenciamento de Disco", lambda: self.run_task(open_target, "diskmgmt.msc")),
+            ("Visualizador de Eventos", lambda: self.run_task(open_target, "eventvwr.msc")),
+            ("Ultimos erros criticos", lambda: self.run_task(self.recent_critical_events)),
         ])
 
         system = self._tab("Sistema")
         self._section(system, "Ferramentas do sistema", [
             ("Abrir Gerenciador de Tarefas", lambda: self.run_task(open_target, "taskmgr")),
+            ("Gerenciador de Dispositivos", lambda: self.run_task(open_target, "devmgmt.msc")),
+            ("Servicos", lambda: self.run_task(open_target, "services.msc")),
+            ("Agendador de Tarefas", lambda: self.run_task(open_target, "taskschd.msc")),
+            ("MSConfig", lambda: self.run_task(open_target, "msconfig")),
             ("Apps que iniciam com Windows", lambda: self.run_task(open_target, "ms-settings:startupapps")),
             ("Apps instalados", lambda: self.run_task(open_target, "ms-settings:appsfeatures")),
             ("Criar ponto de restauracao", self.create_restore_point),
@@ -549,6 +755,11 @@ class TweaksApp(tk.Tk):
             ("Reiniciar Explorer", self.restart_explorer),
             ("Plano Alto Desempenho", self.high_performance_plan),
             ("Plano Equilibrado", self.balanced_plan),
+            ("Opcoes de energia avancadas", lambda: self.run_task(run_command, "control.exe powercfg.cpl,,3", True, 120)),
+            ("Desativar hibernacao", self.disable_hibernation),
+            ("Desempenho visual", lambda: self.run_task(open_target, "SystemPropertiesPerformance.exe")),
+            ("Config Xbox Game Bar", lambda: self.run_task(open_target, "ms-settings:gaming-gamebar")),
+            ("Capturas/Game DVR", lambda: self.run_task(open_target, "ms-settings:gaming-gamedvr")),
             ("Desativar apps em segundo plano", lambda: self.run_task(open_target, "ms-settings:privacy-backgroundapps")),
             ("Abrir privacidade", lambda: self.run_task(open_target, "ms-settings:privacy")),
         ])
@@ -564,6 +775,25 @@ class TweaksApp(tk.Tk):
             ("Abrir pasta de backups", self.open_backup_folder),
             ("Listar drivers instalados", self.list_installed_drivers),
             ("Listar servicos ativos", self.list_running_services),
+            ("Backup Menu Iniciar", lambda: self.run_task(backup_start_menu_shortcuts)),
+            ("Backup Area de Trabalho", lambda: self.run_task(backup_folder_contents, "desktop-backup", DESKTOP)),
+        ])
+
+        games = self._tab("Jogos")
+        self._section(games, "Backups e pastas de saves", [
+            ("Backup Saved Games", lambda: self.run_task(backup_folder_contents, "saved-games-backup", SAVED_GAMES)),
+            ("Backup Documents\\My Games", lambda: self.run_task(backup_folder_contents, "my-games-backup", MY_GAMES)),
+            ("Backup Steam userdata", lambda: self.run_task(backup_folder_contents, "steam-userdata-backup", STEAM_USERDATA)),
+            ("Backup Rockstar Documents", lambda: self.run_task(backup_folder_contents, "rockstar-games-backup", ROCKSTAR_DOCUMENTS)),
+            ("Abrir Saved Games", lambda: self.run_task(open_target, str(SAVED_GAMES))),
+            ("Abrir Steam userdata", lambda: self.run_task(open_target, str(STEAM_USERDATA))),
+            ("Abrir Rockstar", lambda: self.run_task(open_target, str(ROCKSTAR_DOCUMENTS))),
+            ("Abrir Battle.net", lambda: self.run_task(open_target, str(BATTLE_NET_PROGRAMDATA))),
+        ])
+        self._section(games, "Presets de jogo", [
+            ("Antes de jogar", self.preset_before_gaming),
+            ("Depois de jogar", self.preset_after_gaming),
+            ("Preparar Forza6", self.preset_forza6),
         ])
 
         downloads = self._tab("Downloads")
@@ -596,6 +826,11 @@ class TweaksApp(tk.Tk):
             ("Resumo da .minecraft", lambda: self.run_task(minecraft_summary)),
             ("Backup completo .minecraft", self.confirm_backup_minecraft),
             ("Backup mods/configs", lambda: self.run_task(backup_minecraft_modding_only)),
+            ("Backup mundos/saves", lambda: self.run_task(backup_folder_contents, "minecraft-worlds", MINECRAFT_DIR / "saves")),
+            ("Listar mods atuais", lambda: self.run_task(list_minecraft_mods)),
+            ("Limpar logs/crash/cache", self.confirm_minecraft_clean_logs),
+            ("Abrir ultimo crash report", lambda: self.run_task(minecraft_latest_crash_report)),
+            ("Ver Java instalado", lambda: self.run_task(java_versions_report)),
             ("Abrir .minecraft", lambda: self.run_task(open_target, str(MINECRAFT_DIR))),
             ("Abrir mods", lambda: self.run_task(open_target, str(MINECRAFT_DIR / "mods"))),
             ("Abrir resourcepacks", lambda: self.run_task(open_target, str(MINECRAFT_DIR / "resourcepacks"))),
@@ -608,6 +843,9 @@ class TweaksApp(tk.Tk):
         post = self._tab("Pos-formatacao")
         self._section(post, "Checklist automatico", [
             ("Exportar tudo que der para lembrar", lambda: self.run_task(export_pc_profile)),
+            ("Pacote pos-formatacao completo", self.confirm_post_format_bundle),
+            ("Backup atalhos Menu Iniciar", lambda: self.run_task(backup_start_menu_shortcuts)),
+            ("Backup Area de Trabalho", lambda: self.run_task(backup_folder_contents, "desktop-backup", DESKTOP)),
             ("Criar backup Minecraft agora", self.confirm_backup_minecraft),
             ("Abrir downloads essenciais", self.open_essential_downloads),
             ("Criar ponto de restauracao", self.create_restore_point),
@@ -615,6 +853,15 @@ class TweaksApp(tk.Tk):
             ("Abrir apps de inicializacao", lambda: self.run_task(open_target, "ms-settings:startupapps")),
             ("Abrir privacidade", lambda: self.run_task(open_target, "ms-settings:privacy")),
             ("Abrir programas instalados", lambda: self.run_task(open_target, "ms-settings:appsfeatures")),
+        ])
+
+        presets = self._tab("Presets")
+        self._section(presets, "Rotinas prontas", [
+            ("Manutencao rapida", self.preset_quick_maintenance),
+            ("Antes de jogar", self.preset_before_gaming),
+            ("Depois de jogar", self.preset_after_gaming),
+            ("Minecraft modding", self.preset_minecraft_modding),
+            ("Pos-formatacao completo", self.confirm_post_format_bundle),
         ])
 
     def _tab(self, title):
@@ -754,6 +1001,10 @@ class TweaksApp(tk.Tk):
             return
         self.run_task(clear_browser_cache_paths)
 
+    def confirm_clear_extra_caches(self):
+        if confirm("Limpar caches extras", "Limpar shader cache AMD/DirectX e crash dumps do usuario?"):
+            self.run_task(clear_extra_caches)
+
     def open_wireless_display(self):
         command = "Start-Process explorer.exe 'ms-settings-connectabledevices:devicediscovery'"
         self.run_task(run_powershell, command)
@@ -777,6 +1028,18 @@ class TweaksApp(tk.Tk):
             "-RestorePointType 'MODIFY_SETTINGS'"
         )
         self.run_task(run_powershell, command)
+
+    def recent_critical_events(self):
+        command = (
+            "Get-WinEvent -FilterHashtable @{LogName='System'; Level=1,2; StartTime=(Get-Date).AddDays(-7)} "
+            "-MaxEvents 30 | Select-Object TimeCreated,ProviderName,Id,LevelDisplayName,Message | "
+            "Format-List"
+        )
+        return run_powershell(command, timeout=120)
+
+    def disable_hibernation(self):
+        if confirm("Desativar hibernacao", "Desativar hibernacao libera espaco, mas remove inicializacao rapida. Continuar?"):
+            self.run_task(run_command, ["powercfg", "-h", "off"], False, 120)
 
     def pc_info(self):
         info = []
@@ -840,9 +1103,17 @@ class TweaksApp(tk.Tk):
         )
         self.run_task(run_powershell, command)
 
+    def confirm_post_format_bundle(self):
+        if confirm("Pacote pos-formatacao", f"Criar pacote de backups e checklist em {get_backup_dir()}?"):
+            self.run_task(backup_post_format_bundle)
+
     def confirm_backup_minecraft(self):
         if confirm("Backup Minecraft", f"Criar backup em {get_backup_dir()}?"):
             self.run_task(backup_minecraft)
+
+    def confirm_minecraft_clean_logs(self):
+        if confirm("Limpar Minecraft", "Limpar logs, crash-reports, cache e .mixin.out da .minecraft?"):
+            self.run_task(minecraft_clean_logs_and_cache)
 
     def restore_minecraft_backup(self):
         backup_dir = get_backup_dir()
@@ -887,6 +1158,87 @@ class TweaksApp(tk.Tk):
             webbrowser.open(DOWNLOAD_LINKS[name])
         self.append_log("Downloads essenciais", "Links essenciais abertos no navegador.")
 
+    def preset_quick_maintenance(self):
+        if not confirm("Manutencao rapida", "Executar limpeza rapida, cache extra e flush DNS?"):
+            return
+
+        def task():
+            return "\n\n".join([
+                "=== Limpeza rapida ===",
+                quick_temp_prefetch_cleanup(),
+                "=== Caches extras ===",
+                clear_extra_caches(),
+                "=== DNS ===",
+                run_command(["ipconfig", "/flushdns"]),
+            ])
+
+        self.run_task(task)
+
+    def preset_before_gaming(self):
+        if not confirm("Antes de jogar", "Ativar alto desempenho, limpar temporarios/shader cache e flush DNS?"):
+            return
+
+        def task():
+            return "\n\n".join([
+                "=== Plano alto desempenho ===",
+                run_command(
+                    "powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 >nul 2>&1 & "
+                    "powercfg /setactive e9a42b02-d5df-448d-aa00-03f14749eb61",
+                    True,
+                    120,
+                ),
+                "=== Limpeza rapida ===",
+                quick_temp_prefetch_cleanup(),
+                "=== Shader/cache ===",
+                clear_extra_caches(),
+                "=== DNS ===",
+                run_command(["ipconfig", "/flushdns"]),
+            ])
+
+        self.run_task(task)
+
+    def preset_after_gaming(self):
+        if not confirm("Depois de jogar", "Voltar plano equilibrado e limpar temporarios?"):
+            return
+
+        def task():
+            return "\n\n".join([
+                "=== Plano equilibrado ===",
+                run_command(["powercfg", "/setactive", "381b4222-f694-41f0-9685-ff5bb260df2e"], False, 120),
+                "=== Limpeza rapida ===",
+                quick_temp_prefetch_cleanup(),
+            ])
+
+        self.run_task(task)
+
+    def preset_forza6(self):
+        for name in [
+            "AMD RX580 estavel para Forza6 - 23.10.01.14",
+            "Display Driver Uninstaller (DDU)",
+        ]:
+            webbrowser.open(DOWNLOAD_LINKS[name])
+        self.run_task(open_target, "ms-settings:display")
+
+    def preset_minecraft_modding(self):
+        if not confirm("Minecraft modding", "Backup mods/configs, listar mods, abrir .minecraft e ver Java?"):
+            return
+
+        def task():
+            try:
+                os.startfile(str(MINECRAFT_DIR))
+            except Exception:
+                pass
+            return "\n\n".join([
+                "=== Backup mods/configs ===",
+                backup_minecraft_modding_only(),
+                "=== Lista de mods ===",
+                list_minecraft_mods(),
+                "=== Java ===",
+                java_versions_report(),
+            ])
+
+        self.run_task(task)
+
     def list_installed_programs(self):
         desktop = Path.home() / "Desktop" / "programas_instalados.txt"
         command = (
@@ -909,7 +1261,14 @@ class TweaksApp(tk.Tk):
         self.run_task(run_powershell, command)
 
     def restart_explorer(self):
-        self.run_task(run_command, "taskkill /f /im explorer.exe & start explorer.exe", True, 120)
+        command = (
+            "taskkill /f /im StartMenuExperienceHost.exe >nul 2>&1 & "
+            "taskkill /f /im ShellExperienceHost.exe >nul 2>&1 & "
+            "taskkill /f /im explorer.exe >nul 2>&1 & "
+            "timeout /t 2 /nobreak >nul & "
+            "start explorer.exe"
+        )
+        self.run_task(run_command, command, True, 120)
 
     def high_performance_plan(self):
         command = (

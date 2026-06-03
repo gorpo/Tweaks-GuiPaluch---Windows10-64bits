@@ -14,6 +14,14 @@ Painel portátil para Windows 10 64 bits com atalhos de manutenção, downloads 
 - Aba `Pastas` com atalhos para Menu Iniciar, Inicializar com Windows, AppData, ProgramData, Temp, Prefetch, hosts e pastas comuns.
 - Atalho para abrir a raiz do disco `C:\`.
 - Botão para atualizar o Menu Iniciar reiniciando o Explorer.
+- A atualização do Menu Iniciar também recarrega StartMenuExperienceHost e ShellExperienceHost.
+- Observação: atalhos colocados em `Programs` entram na lista alfabética do Iniciar; os quadradinhos/tiles ainda precisam ser fixados manualmente pelo Windows 10.
+- Aba `Jogos` com backups de saves comuns, atalhos de pastas e presets antes/depois de jogar.
+- Aba `Presets` com rotinas prontas para manutenção rápida, jogos, Minecraft modding e pós-formatação.
+- Diagnósticos de Miracast/Wi-Fi e internet.
+- Limpeza extra de shader cache AMD/DirectX e crash dumps do usuário.
+- Ferramentas avançadas: Gerenciador de Dispositivos, Serviços, Agendador, MSConfig, Eventos, Gerenciamento de Disco e últimos erros críticos.
+- Minecraft com backup de mundos, listagem de mods, limpeza de logs/crash/cache e relatório Java.
 - Aba de downloads com drivers AMD RX 580, DDU, Java, Minecraft, Forge, NeoForge, Fabric, Git, VS Code e 7-Zip.
 - Backup completo ou parcial da pasta `.minecraft`.
 - Pasta padrão de backup em `D:\TweaksGuiPaluchBackups`, com opção de escolher outro caminho.
