@@ -9,6 +9,8 @@ Painel portátil para Windows 10 64 bits com atalhos de manutenção, downloads 
 - Solicita administrador ao abrir.
 - Ações para Microsoft Defender, limpeza de temporários, rede, SFC, DISM, energia e ferramentas do Windows.
 - Botão de limpeza rápida para `C:\Windows\Temp`, `%TEMP%` e `C:\Windows\Prefetch`.
+- Aba de rede sem renovação de IP, pensada para uso com IP fixo.
+- Atalhos para espelhar tela em TV/dispositivo sem fio, abrir projeção do Windows e configurar telas.
 - Aba de downloads com drivers AMD RX 580, DDU, Java, Minecraft, Forge, NeoForge, Fabric, Git, VS Code e 7-Zip.
 - Backup completo ou parcial da pasta `.minecraft`.
 - Pasta padrão de backup em `D:\TweaksGuiPaluchBackups`, com opção de escolher outro caminho.

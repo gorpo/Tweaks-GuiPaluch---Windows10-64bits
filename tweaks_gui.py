@@ -449,16 +449,6 @@ class TweaksApp(tk.Tk):
         self._add_sections()
 
     def _add_sections(self):
-        security = self._tab("Seguranca")
-        self._section(security, "Defender", [
-            ("Ativar antivirus", self.enable_defender),
-            ("Desativar antivirus", self.disable_defender),
-            ("Abrir Windows Defender", lambda: self.run_task(open_target, "windowsdefender:")),
-            ("Status do Defender", self.defender_status),
-            ("Scan rapido com Defender", self.defender_quick_scan),
-            ("Scan completo com Defender", self.defender_full_scan),
-        ])
-
         cleanup = self._tab("Limpeza")
         self._section(cleanup, "Arquivos temporarios e caches", [
             ("Limpeza rapida: Temp + %TEMP% + Prefetch", lambda: self.run_task(quick_temp_prefetch_cleanup)),
@@ -473,10 +463,23 @@ class TweaksApp(tk.Tk):
             ("Limpar caches dos navegadores", self.clear_browser_caches),
         ])
 
+        security = self._tab("Seguranca")
+        self._section(security, "Defender", [
+            ("Desativar antivirus", self.disable_defender),
+            ("Ativar antivirus", self.enable_defender),
+            ("Abrir Windows Defender", lambda: self.run_task(open_target, "windowsdefender:")),
+            ("Status do Defender", self.defender_status),
+            ("Scan rapido com Defender", self.defender_quick_scan),
+            ("Scan completo com Defender", self.defender_full_scan),
+        ])
+
         network = self._tab("Rede")
         self._section(network, "Conexao", [
             ("Limpar cache DNS", lambda: self.run_task(run_command, ["ipconfig", "/flushdns"])),
-            ("Renovar IP", self.renew_ip),
+            ("Espelhar em TV/dispositivo sem fio", self.open_wireless_display),
+            ("Configuracoes de projecao", lambda: self.run_task(open_target, "ms-settings:project")),
+            ("Adicionar dispositivo Bluetooth/tela", lambda: self.run_task(open_target, "ms-settings:bluetooth")),
+            ("Configuracoes de tela", lambda: self.run_task(open_target, "ms-settings:display")),
             ("Resetar rede", self.reset_network),
         ])
 
@@ -706,9 +709,9 @@ class TweaksApp(tk.Tk):
             return
         self.run_task(clear_browser_cache_paths)
 
-    def renew_ip(self):
-        if confirm("Renovar IP", "Sua conexao pode cair por alguns segundos. Deseja continuar?"):
-            self.run_task(run_command, "ipconfig /release & ipconfig /renew", True, 300)
+    def open_wireless_display(self):
+        command = "Start-Process explorer.exe 'ms-settings-connectabledevices:devicediscovery'"
+        self.run_task(run_powershell, command)
 
     def reset_network(self):
         if confirm("Resetar rede", "Isso pode exigir reiniciar o PC depois. Deseja continuar?"):
