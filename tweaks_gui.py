@@ -877,8 +877,30 @@ class TweaksApp(tk.Tk):
             canvas.itemconfigure(window_id, width=event.width)
             canvas.configure(scrollregion=canvas.bbox("all"))
 
+        def on_mousewheel(event):
+            if event.delta:
+                canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            else:
+                direction = 1 if event.num == 5 else -1
+                canvas.yview_scroll(direction, "units")
+
+        def bind_mousewheel(event):
+            canvas.bind_all("<MouseWheel>", on_mousewheel)
+            canvas.bind_all("<Button-4>", on_mousewheel)
+            canvas.bind_all("<Button-5>", on_mousewheel)
+
+        def unbind_mousewheel(event):
+            canvas.unbind_all("<MouseWheel>")
+            canvas.unbind_all("<Button-4>")
+            canvas.unbind_all("<Button-5>")
+
         inner.bind("<Configure>", lambda event: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", resize)
+        canvas.bind("<Enter>", bind_mousewheel)
+        canvas.bind("<Leave>", unbind_mousewheel)
+        inner.bind("<Enter>", bind_mousewheel)
+        inner.bind("<Leave>", unbind_mousewheel)
+        inner._scroll_canvas = canvas
         canvas.configure(yscrollcommand=scrollbar.set)
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
@@ -890,10 +912,26 @@ class TweaksApp(tk.Tk):
 
         grid = ttk.Frame(parent, style="Panel.TFrame")
         grid.pack(fill="x")
+        scroll_canvas = getattr(parent, "_scroll_canvas", None)
+
+        def on_mousewheel(event):
+            if not scroll_canvas:
+                return
+            if event.delta:
+                scroll_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            else:
+                direction = 1 if event.num == 5 else -1
+                scroll_canvas.yview_scroll(direction, "units")
+
+        if scroll_canvas:
+            label.bind("<MouseWheel>", on_mousewheel)
+            grid.bind("<MouseWheel>", on_mousewheel)
 
         button_widgets = []
         for index, (text, command) in enumerate(buttons):
             button = ttk.Button(grid, text=text, command=command)
+            if scroll_canvas:
+                button.bind("<MouseWheel>", on_mousewheel)
             button_widgets.append(button)
 
         def layout(event=None):

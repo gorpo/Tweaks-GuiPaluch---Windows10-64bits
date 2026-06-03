@@ -22,6 +22,7 @@ Painel portátil para Windows 10 64 bits com atalhos de manutenção, downloads 
 - Limpeza extra de shader cache AMD/DirectX e crash dumps do usuário.
 - Ferramentas avançadas: Gerenciador de Dispositivos, Serviços, Agendador, MSConfig, Eventos, Gerenciamento de Disco e últimos erros críticos.
 - Minecraft com backup de mundos, listagem de mods, limpeza de logs/crash/cache e relatório Java.
+- Rolagem por roda do mouse nas abas, útil em janelas pequenas.
 - Aba de downloads com drivers AMD RX 580, DDU, Java, Minecraft, Forge, NeoForge, Fabric, Git, VS Code e 7-Zip.
 - Backup completo ou parcial da pasta `.minecraft`.
 - Pasta padrão de backup em `D:\TweaksGuiPaluchBackups`, com opção de escolher outro caminho.
