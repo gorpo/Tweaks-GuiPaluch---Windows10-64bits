@@ -30,6 +30,13 @@ DEFAULT_BACKUP_DIR = Path(r"D:\TweaksGuiPaluchBackups")
 CONFIG_DIR = Path(os.environ.get("APPDATA", DESKTOP)) / "TweaksGuiPaluch"
 CONFIG_FILE = CONFIG_DIR / "settings.json"
 MINECRAFT_DIR = Path(os.environ.get("APPDATA", "")) / ".minecraft"
+USER_START_MENU = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+COMMON_START_MENU = Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData")) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+USER_STARTUP = USER_START_MENU / "Startup"
+COMMON_STARTUP = COMMON_START_MENU / "Startup"
+SEND_TO = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "SendTo"
+QUICK_LAUNCH = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Internet Explorer" / "Quick Launch"
+HOSTS_FILE = Path(r"C:\Windows\System32\drivers\etc\hosts")
 MINECRAFT_BACKUP_ITEMS = [
     "saves",
     "mods",
@@ -334,6 +341,14 @@ def open_download_link(name):
     return f"Abrindo link:\n{name}\n{url}"
 
 
+def open_parent_select_file(path):
+    target = Path(path)
+    if target.exists():
+        os.startfile(str(target.parent))
+        return f"Aberto: {target.parent}\nArquivo: {target.name}"
+    return f"Arquivo nao encontrado: {target}"
+
+
 def confirm(title, text):
     return messagebox.askyesno(title, text)
 
@@ -481,6 +496,35 @@ class TweaksApp(tk.Tk):
             ("Adicionar dispositivo Bluetooth/tela", lambda: self.run_task(open_target, "ms-settings:bluetooth")),
             ("Configuracoes de tela", lambda: self.run_task(open_target, "ms-settings:display")),
             ("Resetar rede", self.reset_network),
+        ])
+
+        folders = self._tab("Pastas")
+        self._section(folders, "Menu Iniciar e atalhos", [
+            ("Menu Iniciar do usuario", lambda: self.run_task(open_target, str(USER_START_MENU))),
+            ("Menu Iniciar todos usuarios", lambda: self.run_task(open_target, str(COMMON_START_MENU))),
+            ("Inicializar com Windows usuario", lambda: self.run_task(open_target, str(USER_STARTUP))),
+            ("Inicializar com Windows todos", lambda: self.run_task(open_target, str(COMMON_STARTUP))),
+            ("Enviar para", lambda: self.run_task(open_target, str(SEND_TO))),
+            ("Quick Launch", lambda: self.run_task(open_target, str(QUICK_LAUNCH))),
+        ])
+        self._section(folders, "Pastas do usuario", [
+            ("Desktop", lambda: self.run_task(open_target, str(DESKTOP))),
+            ("Downloads", lambda: self.run_task(open_target, str(Path.home() / "Downloads"))),
+            ("Documentos", lambda: self.run_task(open_target, str(Path.home() / "Documents"))),
+            ("AppData Roaming", lambda: self.run_task(open_target, os.environ.get("APPDATA", ""))),
+            ("AppData Local", lambda: self.run_task(open_target, os.environ.get("LOCALAPPDATA", ""))),
+            ("Temp do usuario", lambda: self.run_task(open_target, tempfile.gettempdir())),
+        ])
+        self._section(folders, "Pastas do sistema", [
+            ("Raiz do disco C:", lambda: self.run_task(open_target, r"C:\\")),
+            ("ProgramData", lambda: self.run_task(open_target, os.environ.get("PROGRAMDATA", r"C:\ProgramData"))),
+            ("Program Files", lambda: self.run_task(open_target, os.environ.get("ProgramFiles", r"C:\Program Files"))),
+            ("Program Files x86", lambda: self.run_task(open_target, os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))),
+            ("Windows", lambda: self.run_task(open_target, os.environ.get("WINDIR", r"C:\Windows"))),
+            ("System32", lambda: self.run_task(open_target, r"C:\Windows\System32")),
+            ("Drivers etc / hosts", lambda: self.run_task(open_parent_select_file, HOSTS_FILE)),
+            ("Windows Temp", lambda: self.run_task(open_target, r"C:\Windows\Temp")),
+            ("Prefetch", lambda: self.run_task(open_target, r"C:\Windows\Prefetch")),
         ])
 
         repair = self._tab("Reparo")
