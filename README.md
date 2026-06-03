@@ -8,6 +8,7 @@ Painel portátil para Windows 10 64 bits com atalhos de manutenção, downloads 
 - Executável único e portátil.
 - Solicita administrador ao abrir.
 - Ações para Microsoft Defender, limpeza de temporários, rede, SFC, DISM, energia e ferramentas do Windows.
+- Botão de limpeza rápida para `C:\Windows\Temp`, `%TEMP%` e `C:\Windows\Prefetch`.
 - Aba de downloads com drivers AMD RX 580, DDU, Java, Minecraft, Forge, NeoForge, Fabric, Git, VS Code e 7-Zip.
 - Backup completo ou parcial da pasta `.minecraft`.
 - Pasta padrão de backup em `D:\TweaksGuiPaluchBackups`, com opção de escolher outro caminho.
@@ -17,6 +18,8 @@ Painel portátil para Windows 10 64 bits com atalhos de manutenção, downloads 
 
 - `AMD RX580 primeiro estavel - 23.11.1 Polaris/Vega`
 - `AMD RX580 estavel para Forza6 - 23.10.01.14`
+
+Os botões abrem páginas oficiais da AMD, em vez de links diretos para `.exe`, porque alguns downloads diretos da AMD redirecionam para `Download Not Complete` fora do fluxo normal do site.
 
 O driver `23.10.01.14` foi mantido como opção específica para o caso de uso com Forza6. A página oficial da AMD lista esse pacote como DirectX 12 Agility SDK.
 

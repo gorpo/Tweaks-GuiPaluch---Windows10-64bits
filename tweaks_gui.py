@@ -47,8 +47,8 @@ MINECRAFT_BACKUP_ITEMS = [
 
 DOWNLOAD_LINKS = {
     "AMD RX 580 drivers oficiais": "https://www.amd.com/en/support/download/drivers.html",
-    "AMD RX580 primeiro estavel - 23.11.1 Polaris/Vega": "https://www.amd.com/en/resources/support-articles/release-notes/RN-RAD-WIN-23-11-1-POLARIS-VEGA.html",
-    "AMD RX580 estavel para Forza6 - 23.10.01.14": "https://drivers.amd.com/drivers/amd-software-adrenalin-edition-23.10.01.14-win10-win11-work-graphs.exe",
+    "AMD RX580 primeiro estavel - 23.11.1 Polaris/Vega": "https://www.amd.com/en/resources/support-articles/release-notes/RN-RAD-WIN-23-11-1.html",
+    "AMD RX580 estavel para Forza6 - 23.10.01.14": "https://www.amd.com/en/resources/support-articles/release-notes/RN-RAD-MS-AGILITY-SDK-2023-6-711.html",
     "AMD 23.10.01.14 notas oficiais": "https://www.amd.com/en/resources/support-articles/release-notes/RN-RAD-MS-AGILITY-SDK-2023-6-711.html",
     "Display Driver Uninstaller (DDU)": "https://www.wagnardsoft.com/display-driver-uninstaller-DDU-",
     "Temurin Java 8": "https://adoptium.net/temurin/releases/?version=8",
@@ -152,6 +152,19 @@ def remove_contents(path):
         f"Itens removidos: {removed}\n"
         f"Itens ignorados/em uso: {failed}"
     )
+
+
+def quick_temp_prefetch_cleanup():
+    targets = [
+        ("C:\\Windows\\Temp", r"C:\Windows\Temp"),
+        ("%TEMP%", tempfile.gettempdir()),
+        ("C:\\Windows\\Prefetch", r"C:\Windows\Prefetch"),
+    ]
+
+    results = []
+    for label, path in targets:
+        results.append(f"--- {label} ---\n{remove_contents(path)}")
+    return "\n\n".join(results)
 
 
 def clear_browser_cache_paths():
@@ -448,6 +461,7 @@ class TweaksApp(tk.Tk):
 
         cleanup = self._tab("Limpeza")
         self._section(cleanup, "Arquivos temporarios e caches", [
+            ("Limpeza rapida: Temp + %TEMP% + Prefetch", lambda: self.run_task(quick_temp_prefetch_cleanup)),
             ("Limpar C:\\Windows\\Temp", lambda: self.run_task(remove_contents, r"C:\Windows\Temp")),
             ("Limpar %TEMP%", lambda: self.run_task(remove_contents, tempfile.gettempdir())),
             ("Limpar Prefetch", lambda: self.run_task(remove_contents, r"C:\Windows\Prefetch")),
