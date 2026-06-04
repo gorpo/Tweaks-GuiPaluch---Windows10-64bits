@@ -21,16 +21,22 @@ from PIL import Image
 
 
 APP_TITLE = "Tweaks GuiPaluch"
-BG = "#0b1020"
-SIDEBAR = "#0f172a"
-PANEL = "#111827"
-PANEL_2 = "#172033"
-TEXT = "#e5e7eb"
-MUTED = "#94a3b8"
-ACCENT = "#38bdf8"
-ACCENT_2 = "#22d3ee"
-BUTTON = "#1f2a3d"
-BUTTON_ACTIVE = "#29384f"
+BG = "#171717"
+SIDEBAR = "#171717"
+PANEL = "#212121"
+PANEL_2 = "#2a2a2a"
+TEXT = "#f3f3f3"
+MUTED = "#a3a3a3"
+ACCENT = "#ffffff"
+ACCENT_2 = "#d4d4d4"
+BUTTON = "#2f2f2f"
+BUTTON_ACTIVE = "#3a3a3a"
+TITLEBAR = "#171717"
+SURFACE = "#212121"
+SURFACE_2 = "#2f2f2f"
+BORDER = "#3a3a3a"
+HOVER = "#383838"
+LOG_BG = "#0f0f0f"
 DESKTOP = Path.home() / "Desktop"
 DEFAULT_BACKUP_DIR = Path(r"D:\TweaksGuiPaluchBackups")
 CONFIG_DIR = Path(os.environ.get("APPDATA", DESKTOP)) / "TweaksGuiPaluch"
@@ -689,15 +695,9 @@ def create_redragon_light_preset(preset_name, mode_name, color, brightness, spee
     }
     preset_file.write_text(json.dumps(preset, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    if REDRAGON_EXE.exists():
-        try:
-            os.startfile(str(REDRAGON_EXE))
-        except Exception:
-            pass
-
     experimental = "\nAviso: este modo e experimental no layout do mouse." if mode.get("experimental") else ""
     return (
-        f"Preset criado:\n{preset_file}\n\n"
+        f"Preset salvo, mas ainda NAO aplicado no mouse:\n{preset_file}\n\n"
         f"Modo: {preset_name}\n"
         f"Tipo: {mode['name']} ({mode['english']})\n"
         f"Codigo interno: modo {mode['mode']}, atributo {mode['attribute']}\n"
@@ -705,7 +705,8 @@ def create_redragon_light_preset(preset_name, mode_name, color, brightness, spee
         f"Brilho: {brightness}/5\n"
         f"Velocidade: {speed}/2"
         f"{experimental}\n\n"
-        "Abri o software Redragon para voce aplicar esse visual por enquanto."
+        "Removi a abertura automatica do software Redragon. "
+        "Para aplicar direto no mouse ainda precisamos descobrir o arquivo de perfil ou o protocolo HID usado pelo driver."
     )
 
 
@@ -980,7 +981,7 @@ class TweaksApp(ctk.CTk):
 
     def _apply_theme(self):
         ctk.set_appearance_mode("dark")
-        ctk.set_default_color_theme("blue")
+        ctk.set_default_color_theme("green")
         self.style = ttk.Style(self)
         try:
             self.style.theme_use("clam")
@@ -1002,7 +1003,7 @@ class TweaksApp(ctk.CTk):
             "TButton",
             background=BUTTON,
             foreground=TEXT,
-            bordercolor="#26364d",
+            bordercolor=BORDER,
             lightcolor=BUTTON,
             darkcolor=BUTTON,
             focusthickness=1,
@@ -1011,7 +1012,7 @@ class TweaksApp(ctk.CTk):
         )
         self.style.map(
             "TButton",
-            background=[("active", BUTTON_ACTIVE), ("pressed", "#0284c7")],
+            background=[("active", BUTTON_ACTIVE), ("pressed", SURFACE_2)],
             foreground=[("disabled", MUTED), ("active", "#ffffff")],
         )
         self.style.configure(
@@ -1029,7 +1030,7 @@ class TweaksApp(ctk.CTk):
         )
         self.style.map(
             "TNotebook.Tab",
-            background=[("selected", "#0ea5e9"), ("active", "#334155")],
+            background=[("selected", SURFACE_2), ("active", HOVER)],
             foreground=[("selected", "#ffffff"), ("active", "#ffffff")],
         )
         self.style.configure("Vertical.TScrollbar", background=PANEL_2, troughcolor=BG, arrowcolor=TEXT)
@@ -1038,7 +1039,7 @@ class TweaksApp(ctk.CTk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        self.titlebar = ctk.CTkFrame(self, height=38, fg_color="#171717", corner_radius=0)
+        self.titlebar = ctk.CTkFrame(self, height=38, fg_color=TITLEBAR, corner_radius=0)
         self.titlebar.grid(row=0, column=0, sticky="ew")
         self.titlebar.grid_columnconfigure(1, weight=1)
         self.titlebar.bind("<Button-1>", self._start_drag)
@@ -1085,7 +1086,7 @@ class TweaksApp(ctk.CTk):
         shell.grid_columnconfigure(1, weight=1)
         shell.grid_rowconfigure(0, weight=1)
 
-        sidebar = ctk.CTkFrame(shell, width=220, fg_color="#111111", corner_radius=18)
+        sidebar = ctk.CTkFrame(shell, width=220, fg_color=SURFACE, corner_radius=18)
         sidebar.grid(row=0, column=0, sticky="ns", padx=(0, 12))
         sidebar.grid_propagate(False)
         sidebar.grid_rowconfigure(2, weight=1)
@@ -1124,9 +1125,9 @@ class TweaksApp(ctk.CTk):
             right,
             height=126,
             corner_radius=18,
-            fg_color="#050816",
+            fg_color=LOG_BG,
             border_width=1,
-            border_color="#1f2937",
+            border_color=BORDER,
             text_color=TEXT,
             font=("Cascadia Mono", 10),
         )
@@ -1514,8 +1515,8 @@ class TweaksApp(ctk.CTk):
             self.content_area,
             fg_color=PANEL,
             corner_radius=18,
-            scrollbar_button_color="#2b3448",
-            scrollbar_button_hover_color="#3b465c",
+            scrollbar_button_color=SURFACE_2,
+            scrollbar_button_hover_color=HOVER,
         )
         self.pages[title] = outer
 
@@ -1554,7 +1555,7 @@ class TweaksApp(ctk.CTk):
             "Presets": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_lightmode.png",
         }
         nav_text = f"{icons.get(title, '•')}  {title}"
-        image = load_local_icon(icon_files.get(title))
+        image = None
         if image:
             self.nav_images.append(image)
             nav_text = title
@@ -1567,7 +1568,7 @@ class TweaksApp(ctk.CTk):
             height=38,
             corner_radius=12,
             fg_color="transparent",
-            hover_color="#242424",
+            hover_color=SURFACE_2,
             text_color=TEXT,
             font=("Segoe UI", 12),
             command=lambda page=title: self._show_page(page),
@@ -1584,10 +1585,10 @@ class TweaksApp(ctk.CTk):
             self.nav_buttons[self.current_page].configure(fg_color="transparent", text_color=TEXT)
         self.pages[title].grid(row=0, column=0, sticky="nsew", padx=14, pady=14)
         self.current_page = title
-        self.nav_buttons[title].configure(fg_color="#242424", text_color="#ffffff")
+        self.nav_buttons[title].configure(fg_color=SURFACE_2, text_color="#ffffff")
 
     def _section(self, parent, title, buttons):
-        section = ctk.CTkFrame(parent, fg_color="#151515", corner_radius=18)
+        section = ctk.CTkFrame(parent, fg_color=SURFACE, corner_radius=18)
         section.pack(fill="x", padx=4, pady=(4, 14))
         section.grid_columnconfigure(0, weight=1)
 
@@ -1596,7 +1597,7 @@ class TweaksApp(ctk.CTk):
             text=title,
             anchor="w",
             font=("Segoe UI", 13, "bold"),
-            text_color="#d4d4d4",
+            text_color=TEXT,
         )
         label.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 8))
 
@@ -1611,10 +1612,10 @@ class TweaksApp(ctk.CTk):
                 command=command,
                 height=42,
                 corner_radius=14,
-                fg_color="#242424",
-                hover_color="#303030",
+                fg_color=SURFACE_2,
+                hover_color=HOVER,
                 border_width=1,
-                border_color="#333333",
+                border_color=BORDER,
                 text_color=TEXT,
                 font=("Segoe UI", 11),
             )

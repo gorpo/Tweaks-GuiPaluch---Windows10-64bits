@@ -4,7 +4,7 @@ Painel portátil para Windows 10 64 bits com atalhos de manutenção, downloads 
 
 ## Recursos
 
-- Interface dark em CustomTkinter com menu lateral, icones, botoes arredondados e painel de funcoes.
+- Interface dark em CustomTkinter com menu lateral, icones monocromaticos, botoes arredondados e paleta preta/cinza inspirada no chat.
 - Executável único e portátil.
 - Solicita administrador ao abrir.
 - Ações para Microsoft Defender, limpeza de temporários, rede, SFC, DISM, energia e ferramentas do Windows.
@@ -21,10 +21,11 @@ Painel portátil para Windows 10 64 bits com atalhos de manutenção, downloads 
 - Diagnósticos de Miracast/Wi-Fi e internet.
 - Aba `Tela` com relatório DDC/CI, luz de fundo/luminância, contraste, nitidez, RGB, nível preto, presets de cor, HDR e projeção.
 - Aba `Bluetooth` com atalhos de pareamento, audio, diagnostico e reset de servicos Bluetooth/audio.
-- Aba `Redragon` para abrir/reiniciar o software M602P-KS, ver modos de luz detectados, criar presets de luz e fazer backup dos configs.
+- Aba `Redragon` para abrir/reiniciar o software M602P-KS, ver modos de luz detectados, salvar receitas de presets de luz e fazer backup dos configs.
 - Modos Redragon oficiais mapeados: Fixo/Steady, Respiracao/Breathing, Fluxo/Flowing light, Neon, Corrida/Horse Racing, Respiracao misturada/Mixed color breathing e Luz desligada.
 - Modos Redragon experimentais mapeados do layout comentado: Music e Ambilight. Eles ficam como receita/preset ate confirmarmos que o software/firmware aceita aplicar.
-- Presets Redragon ficam salvos em `%APPDATA%\TweaksGuiPaluch\redragon-light-presets`.
+- Presets Redragon ficam salvos em `%APPDATA%\TweaksGuiPaluch\redragon-light-presets`, mas ainda nao sao aplicados direto no mouse.
+- O Tweaks nao abre mais o software Redragon automaticamente ao clicar em cores/modos; abrir o software fica em botao separado.
 - Quando o software Redragon esta instalado, o Tweaks usa alguns icones locais dele na sidebar sem redistribuir esses arquivos no repositorio.
 - Limpeza extra de shader cache AMD/DirectX e crash dumps do usuário.
 - Ferramentas avançadas: Gerenciador de Dispositivos, Serviços, Agendador, MSConfig, Eventos, Gerenciamento de Disco e últimos erros críticos.
