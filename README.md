@@ -21,11 +21,12 @@ Painel portátil para Windows 10 64 bits com atalhos de manutenção, downloads 
 - Diagnósticos de Miracast/Wi-Fi e internet.
 - Aba `Tela` com relatório DDC/CI, luz de fundo/luminância, contraste, nitidez, RGB, nível preto, presets de cor, HDR e projeção.
 - Aba `Bluetooth` com atalhos de pareamento, audio, diagnostico e reset de servicos Bluetooth/audio.
-- Aba `Redragon` para abrir/reiniciar o software M602P-KS, ver modos de luz detectados, salvar receitas de presets de luz e fazer backup dos configs.
+- Aba `Redragon` para controlar a luz do M602P-KS direto por HID, sem abrir o software oficial, alem de ver modos detectados e fazer backup dos configs.
 - Modos Redragon oficiais mapeados: Fixo/Steady, Respiracao/Breathing, Fluxo/Flowing light, Neon, Corrida/Horse Racing, Respiracao misturada/Mixed color breathing e Luz desligada.
 - Modos Redragon experimentais mapeados do layout comentado: Music e Ambilight. Eles ficam como receita/preset ate confirmarmos que o software/firmware aceita aplicar.
-- Presets Redragon ficam salvos em `%APPDATA%\TweaksGuiPaluch\redragon-light-presets`, mas ainda nao sao aplicados direto no mouse.
-- O Tweaks nao abre mais o software Redragon automaticamente ao clicar em cores/modos; abrir o software fica em botao separado.
+- Presets Redragon ficam salvos em `%APPDATA%\TweaksGuiPaluch\redragon-light-presets` e os botoes aplicam via HID direto quando o mouse aparece como `VID_1A2C` / `PID_9FFF` ou `PID_8FFF`.
+- O Tweaks nao abre o software Redragon ao clicar em cores/modos; abrir o software fica em botao separado.
+- Cores principais do mouse ajustadas para branco/cinza/desligado, combinando com a paleta preta/cinza do app.
 - Quando o software Redragon esta instalado, o Tweaks usa alguns icones locais dele na sidebar sem redistribuir esses arquivos no repositorio.
 - Limpeza extra de shader cache AMD/DirectX e crash dumps do usuário.
 - Ferramentas avançadas: Gerenciador de Dispositivos, Serviços, Agendador, MSConfig, Eventos, Gerenciamento de Disco e últimos erros críticos.

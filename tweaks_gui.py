@@ -65,6 +65,8 @@ REDRAGON_EXE = REDRAGON_DIR / "DeviceDriver.exe"
 REDRAGON_CONFIG = REDRAGON_DIR / "config.xml"
 REDRAGON_LAYOUT = REDRAGON_DIR / "layouts" / "MOUSE_DM204.xml"
 REDRAGON_PRESET_DIR = CONFIG_DIR / "redragon-light-presets"
+REDRAGON_VENDOR_ID = 0x1A2C
+REDRAGON_PRODUCT_IDS = (0x9FFF, 0x8FFF)
 REDRAGON_LIGHT_MODES = [
     {"name": "Fixo", "english": "Steady", "mode": 5, "lang": 902, "attribute": 49},
     {"name": "Respiracao", "english": "Breathing", "mode": 6, "lang": 903, "attribute": 67},
@@ -78,16 +80,9 @@ REDRAGON_LIGHT_MODES = [
 ]
 REDRAGON_LIGHT_PRESETS = [
     ("Fixo branco", "Fixo", "#FFFFFF", 5, 1),
-    ("Fixo vermelho", "Fixo", "#FF0000", 5, 1),
-    ("Fixo verde", "Fixo", "#00FF00", 5, 1),
-    ("Fixo azul", "Fixo", "#006CFF", 5, 1),
-    ("Fixo ciano", "Fixo", "#00E5FF", 5, 1),
-    ("Fixo roxo", "Fixo", "#8B5CF6", 5, 1),
-    ("Fixo rosa", "Fixo", "#FF4FD8", 5, 1),
-    ("Fixo amarelo", "Fixo", "#FFD000", 5, 1),
-    ("Respirar azul", "Respiracao", "#006CFF", 4, 2),
-    ("Respirar vermelho", "Respiracao", "#FF0000", 4, 2),
-    ("Respirar roxo", "Respiracao", "#8B5CF6", 4, 2),
+    ("Fixo cinza", "Fixo", "#A3A3A3", 3, 1),
+    ("Fixo branco baixo", "Fixo", "#FFFFFF", 2, 1),
+    ("Respirar branco", "Respiracao", "#FFFFFF", 3, 2),
     ("Fluxo RGB", "Fluxo", "RGB", 5, 2),
     ("Neon RGB", "Neon", "RGB", 5, 2),
     ("Corrida RGB", "Corrida", "RGB", 5, 2),
@@ -110,6 +105,43 @@ MINECRAFT_BACKUP_ITEMS = [
     "options.txt",
     "servers.dat",
 ]
+
+
+DIGCF_PRESENT = 0x00000002
+DIGCF_DEVICEINTERFACE = 0x00000010
+GENERIC_READ = 0x80000000
+GENERIC_WRITE = 0x40000000
+FILE_SHARE_READ = 0x00000001
+FILE_SHARE_WRITE = 0x00000002
+OPEN_EXISTING = 3
+INVALID_HANDLE_VALUE = wintypes.HANDLE(-1).value
+
+
+class GUID(ctypes.Structure):
+    _fields_ = [
+        ("Data1", wintypes.DWORD),
+        ("Data2", wintypes.WORD),
+        ("Data3", wintypes.WORD),
+        ("Data4", ctypes.c_ubyte * 8),
+    ]
+
+
+class SP_DEVICE_INTERFACE_DATA(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("InterfaceClassGuid", GUID),
+        ("Flags", wintypes.DWORD),
+        ("Reserved", ctypes.c_void_p),
+    ]
+
+
+class HIDD_ATTRIBUTES(ctypes.Structure):
+    _fields_ = [
+        ("Size", wintypes.ULONG),
+        ("VendorID", wintypes.USHORT),
+        ("ProductID", wintypes.USHORT),
+        ("VersionNumber", wintypes.USHORT),
+    ]
 
 DOWNLOAD_LINKS = {
     "AMD RX 580 drivers oficiais": "https://www.amd.com/en/support/download/drivers.html",
@@ -622,6 +654,223 @@ def load_local_icon(path, size=(18, 18)):
     return None
 
 
+def redragon_hid_dlls():
+    try:
+        setupapi = ctypes.WinDLL("setupapi", use_last_error=True)
+        hid = ctypes.WinDLL("hid", use_last_error=True)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    except Exception as exc:
+        raise RuntimeError(f"Falha carregando DLL HID do Windows: {exc}") from exc
+
+    hid.HidD_GetHidGuid.argtypes = [ctypes.POINTER(GUID)]
+    setupapi.SetupDiGetClassDevsW.argtypes = [
+        ctypes.POINTER(GUID),
+        wintypes.LPCWSTR,
+        wintypes.HWND,
+        wintypes.DWORD,
+    ]
+    setupapi.SetupDiGetClassDevsW.restype = wintypes.HANDLE
+    setupapi.SetupDiEnumDeviceInterfaces.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_void_p,
+        ctypes.POINTER(GUID),
+        wintypes.DWORD,
+        ctypes.POINTER(SP_DEVICE_INTERFACE_DATA),
+    ]
+    setupapi.SetupDiGetDeviceInterfaceDetailW.argtypes = [
+        wintypes.HANDLE,
+        ctypes.POINTER(SP_DEVICE_INTERFACE_DATA),
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+        ctypes.c_void_p,
+    ]
+    setupapi.SetupDiDestroyDeviceInfoList.argtypes = [wintypes.HANDLE]
+    kernel32.CreateFileW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    kernel32.CreateFileW.restype = wintypes.HANDLE
+    kernel32.WriteFile.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+        ctypes.c_void_p,
+    ]
+    kernel32.WriteFile.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    hid.HidD_GetAttributes.argtypes = [wintypes.HANDLE, ctypes.POINTER(HIDD_ATTRIBUTES)]
+    return setupapi, hid, kernel32
+
+
+def redragon_hid_detail_path(setupapi, info, interface_data):
+    required = wintypes.DWORD()
+    setupapi.SetupDiGetDeviceInterfaceDetailW(info, ctypes.byref(interface_data), None, 0, ctypes.byref(required), None)
+    if required.value == 0:
+        return None
+    buf = ctypes.create_string_buffer(required.value)
+    cb_size = 8 if ctypes.sizeof(ctypes.c_void_p) == 8 else 6
+    ctypes.cast(buf, ctypes.POINTER(wintypes.DWORD))[0] = cb_size
+    ok = setupapi.SetupDiGetDeviceInterfaceDetailW(
+        info,
+        ctypes.byref(interface_data),
+        buf,
+        required,
+        None,
+        None,
+    )
+    if not ok:
+        return None
+    return ctypes.wstring_at(ctypes.addressof(buf) + ctypes.sizeof(wintypes.DWORD))
+
+
+def iter_redragon_hid_paths():
+    setupapi, hid, _kernel32 = redragon_hid_dlls()
+    guid = GUID()
+    hid.HidD_GetHidGuid(ctypes.byref(guid))
+    info = setupapi.SetupDiGetClassDevsW(ctypes.byref(guid), None, None, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE)
+    if info == INVALID_HANDLE_VALUE:
+        return
+    try:
+        index = 0
+        while True:
+            data = SP_DEVICE_INTERFACE_DATA()
+            data.cbSize = ctypes.sizeof(data)
+            if not setupapi.SetupDiEnumDeviceInterfaces(info, None, ctypes.byref(guid), index, ctypes.byref(data)):
+                break
+            index += 1
+            path = redragon_hid_detail_path(setupapi, info, data)
+            low = (path or "").lower()
+            if (
+                "vid_1a2c" in low
+                and ("pid_9fff" in low or "pid_8fff" in low)
+                and "mi_00" in low
+            ):
+                yield path
+    finally:
+        setupapi.SetupDiDestroyDeviceInfoList(info)
+
+
+def redragon_parse_color(color):
+    if color == "OFF":
+        return 0, 0, 0
+    if color == "RGB":
+        return 255, 255, 255
+    value = str(color).strip().lstrip("#")
+    if len(value) != 6:
+        raise ValueError(f"Cor invalida: {color}")
+    return tuple(int(value[i : i + 2], 16) for i in (0, 2, 4))
+
+
+def redragon_report(prefix, size=65):
+    data = bytearray(size)
+    data[: len(prefix)] = prefix
+    return data
+
+
+def redragon_write_report(kernel32, handle, report):
+    buf = (ctypes.c_ubyte * len(report)).from_buffer_copy(report)
+    written = wintypes.DWORD()
+    ok = kernel32.WriteFile(handle, buf, len(report), ctypes.byref(written), None)
+    if not ok or written.value != len(report):
+        return False, ctypes.get_last_error(), written.value
+    return True, 0, written.value
+
+
+def apply_redragon_light_direct(preset_name, mode_name, color, brightness, speed):
+    mode = redragon_mode_by_name(mode_name)
+    if not mode:
+        return f"Modo nao encontrado: {mode_name}"
+
+    try:
+        red, green, blue = redragon_parse_color(color)
+    except Exception as exc:
+        return str(exc)
+
+    setupapi, hid, kernel32 = redragon_hid_dlls()
+    del setupapi, hid
+    paths = list(iter_redragon_hid_paths())
+    if not paths:
+        return (
+            "Mouse Redragon nao encontrado na interface HID direta.\n"
+            "Procurei VID_1A2C com PID_9FFF/8FFF em MI_00."
+        )
+
+    light_mode = mode["mode"]
+    if mode_name == "Luz desligada" or color == "OFF":
+        light_mode = 7
+
+    reports = [
+        # Griffin-family RGB command found by USB HID reverse engineering.
+        redragon_report([0x02, 0xF3, 0x49, 0x04, 0x06, 0x00, 0x00, 0x00, red, green, blue, 0x01, 0x00, 0x02, 0x00, 0x00]),
+        redragon_report([0x02, 0xF3, 0x49, 0x04, light_mode & 0xFF, brightness & 0xFF, speed & 0xFF, 0x00, red, green, blue, 0x01, 0x00, 0x02, 0x00, 0x00]),
+        redragon_report([0x02, 0xF1, 0x02, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+    ]
+
+    results = []
+    success = False
+    for path in paths:
+        handle = kernel32.CreateFileW(
+            path,
+            GENERIC_READ | GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            None,
+            OPEN_EXISTING,
+            0,
+            None,
+        )
+        if handle == INVALID_HANDLE_VALUE:
+            results.append(f"- Falha abrindo {path}: erro {ctypes.get_last_error()}")
+            continue
+        try:
+            path_ok = True
+            for report in reports:
+                ok, err, written = redragon_write_report(kernel32, handle, report)
+                if not ok:
+                    path_ok = False
+                    results.append(f"- Envio falhou em {path}: erro {err}, bytes {written}")
+                    break
+            if path_ok:
+                success = True
+                results.append(f"- OK: {path}")
+        finally:
+            kernel32.CloseHandle(handle)
+
+    status = "aplicado" if success else "nao aplicado"
+    return (
+        f"Preset Redragon {status} via HID direto, sem abrir o software.\n\n"
+        f"Preset: {preset_name}\n"
+        f"Modo: {mode['name']} ({mode['english']})\n"
+        f"Cor: #{red:02X}{green:02X}{blue:02X}\n"
+        f"Brilho: {brightness}/5\n"
+        f"Velocidade: {speed}/2\n\n"
+        + "\n".join(results)
+    )
+
+
+def redragon_hid_report():
+    try:
+        paths = list(iter_redragon_hid_paths())
+    except Exception as exc:
+        return f"Erro no diagnostico HID Redragon: {exc}"
+    if not paths:
+        return "Nenhuma interface HID Redragon MI_00 encontrada para VID_1A2C PID_9FFF/8FFF."
+    lines = [
+        "Interfaces HID Redragon para controle direto:",
+        "",
+        *[f"- {path}" for path in paths],
+        "",
+        "O Tweaks envia reports de 65 bytes nessa interface e nao abre DeviceDriver.exe.",
+    ]
+    return "\n".join(lines)
+
+
 def redragon_light_report():
     if not REDRAGON_LAYOUT.exists():
         return f"Layout nao encontrado:\n{REDRAGON_LAYOUT}"
@@ -660,7 +909,8 @@ def redragon_light_report():
         if cleaned.startswith("<light") or cleaned.startswith("<info"):
             lines.append(cleaned)
     lines.append("")
-    lines.append("Obs: isso mostra modos/limites da interface. Aplicar cor direto no mouse ainda depende do protocolo HID do software.")
+    lines.append("HID direto:")
+    lines.append(redragon_hid_report())
     return "\n".join(lines)
 
 
@@ -687,27 +937,17 @@ def create_redragon_light_preset(preset_name, mode_name, color, brightness, spee
         "brightness_0_to_5": brightness,
         "speed_0_to_2": speed,
         "created_at": dt.datetime.now().isoformat(timespec="seconds"),
-        "status": "recipe-only",
+        "status": "hid-direct",
         "note": (
-            "Este preset documenta o modo para aplicar no software Redragon. "
-            "O envio direto ao mouse ainda depende de descobrir o arquivo/protocolo HID usado pelo DeviceDriver.exe."
+            "Este preset foi enviado pelo Tweaks diretamente pela interface HID do mouse, "
+            "sem abrir DeviceDriver.exe."
         ),
     }
     preset_file.write_text(json.dumps(preset, indent=2, ensure_ascii=False), encoding="utf-8")
 
     experimental = "\nAviso: este modo e experimental no layout do mouse." if mode.get("experimental") else ""
-    return (
-        f"Preset salvo, mas ainda NAO aplicado no mouse:\n{preset_file}\n\n"
-        f"Modo: {preset_name}\n"
-        f"Tipo: {mode['name']} ({mode['english']})\n"
-        f"Codigo interno: modo {mode['mode']}, atributo {mode['attribute']}\n"
-        f"Cor: {color}\n"
-        f"Brilho: {brightness}/5\n"
-        f"Velocidade: {speed}/2"
-        f"{experimental}\n\n"
-        "Removi a abertura automatica do software Redragon. "
-        "Para aplicar direto no mouse ainda precisamos descobrir o arquivo de perfil ou o protocolo HID usado pelo driver."
-    )
+    result = apply_redragon_light_direct(preset_name, mode_name, color, brightness, speed)
+    return f"{result}{experimental}\n\nPreset salvo em:\n{preset_file}"
 
 
 def open_redragon_preset_folder():
@@ -1304,28 +1544,27 @@ class TweaksApp(ctk.CTk):
             ("Abrir pasta do software", lambda: self.run_task(open_target, str(REDRAGON_DIR))),
             ("Abrir config.xml", lambda: self.run_task(open_target, str(REDRAGON_CONFIG))),
             ("Abrir layout MOUSE_DM204", lambda: self.run_task(open_target, str(REDRAGON_LAYOUT))),
+            ("Diagnostico HID direto", lambda: self.run_task(redragon_hid_report)),
             ("Relatorio de luz/modos", lambda: self.run_task(redragon_light_report)),
             ("Backup configs Redragon", lambda: self.run_task(backup_redragon_files)),
             ("Site Redragon", lambda: self.run_task(open_target, "https://www.redragon.com.br/")),
         ])
         self._section(redragon, "Modos de luz oficiais", [
             ("Fixo / Steady", lambda: self.run_task(create_redragon_light_preset, "Fixo branco", "Fixo", "#FFFFFF", 5, 1)),
-            ("Respiracao / Breathing", lambda: self.run_task(create_redragon_light_preset, "Respirar azul", "Respiracao", "#006CFF", 4, 2)),
+            ("Respiracao / Breathing", lambda: self.run_task(create_redragon_light_preset, "Respirar branco", "Respiracao", "#FFFFFF", 3, 2)),
             ("Fluxo / Flowing light", lambda: self.run_task(create_redragon_light_preset, "Fluxo RGB", "Fluxo", "RGB", 5, 2)),
             ("Neon", lambda: self.run_task(create_redragon_light_preset, "Neon RGB", "Neon", "RGB", 5, 2)),
             ("Corrida / Horse Racing", lambda: self.run_task(create_redragon_light_preset, "Corrida RGB", "Corrida", "RGB", 5, 2)),
             ("Respiracao misturada", lambda: self.run_task(create_redragon_light_preset, "Respiracao misturada RGB", "Respiracao misturada", "RGB", 5, 2)),
             ("Desligar luz", lambda: self.run_task(create_redragon_light_preset, "Apagar luz", "Luz desligada", "OFF", 0, 0)),
         ])
-        self._section(redragon, "Cores prontas", [
+        self._section(redragon, "Cores do chat", [
             ("Branco fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo branco", "Fixo", "#FFFFFF", 5, 1)),
-            ("Vermelho fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo vermelho", "Fixo", "#FF0000", 5, 1)),
-            ("Verde fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo verde", "Fixo", "#00FF00", 5, 1)),
-            ("Azul fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo azul", "Fixo", "#006CFF", 5, 1)),
-            ("Ciano fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo ciano", "Fixo", "#00E5FF", 5, 1)),
-            ("Roxo fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo roxo", "Fixo", "#8B5CF6", 5, 1)),
-            ("Rosa fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo rosa", "Fixo", "#FF4FD8", 5, 1)),
-            ("Amarelo fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo amarelo", "Fixo", "#FFD000", 5, 1)),
+            ("Cinza claro", lambda: self.run_task(create_redragon_light_preset, "Fixo cinza claro", "Fixo", "#D4D4D4", 3, 1)),
+            ("Cinza medio", lambda: self.run_task(create_redragon_light_preset, "Fixo cinza medio", "Fixo", "#A3A3A3", 2, 1)),
+            ("Branco baixo", lambda: self.run_task(create_redragon_light_preset, "Fixo branco baixo", "Fixo", "#FFFFFF", 2, 1)),
+            ("Respirar branco", lambda: self.run_task(create_redragon_light_preset, "Respirar branco", "Respiracao", "#FFFFFF", 3, 2)),
+            ("Apagar luz", lambda: self.run_task(create_redragon_light_preset, "Apagar luz", "Luz desligada", "OFF", 0, 0)),
         ])
         self._section(redragon, "Modos experimentais do layout", [
             ("Musica / Music", lambda: self.run_task(create_redragon_light_preset, "Musica experimental", "Musica", "RGB", 5, 2)),
