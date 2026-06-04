@@ -12,8 +12,12 @@ import threading
 import tkinter as tk
 import webbrowser
 import zipfile
+from ctypes import wintypes
 from pathlib import Path
 from tkinter import filedialog, messagebox, scrolledtext, ttk
+
+import customtkinter as ctk
+from PIL import Image
 
 
 APP_TITLE = "Tweaks GuiPaluch"
@@ -50,6 +54,42 @@ DIRECTX_SHADER_CACHE = Path(os.environ.get("LOCALAPPDATA", "")) / "D3DSCache"
 AMD_SHADER_CACHE = Path(os.environ.get("LOCALAPPDATA", "")) / "AMD" / "DxCache"
 AMD_GL_CACHE = Path(os.environ.get("LOCALAPPDATA", "")) / "AMD" / "GLCache"
 WINDOWS_CRASH_DUMPS = Path(os.environ.get("LOCALAPPDATA", "")) / "CrashDumps"
+REDRAGON_DIR = Path(r"C:\Program Files (x86)\Redragon  M602P-KS  Gaming Mouse")
+REDRAGON_EXE = REDRAGON_DIR / "DeviceDriver.exe"
+REDRAGON_CONFIG = REDRAGON_DIR / "config.xml"
+REDRAGON_LAYOUT = REDRAGON_DIR / "layouts" / "MOUSE_DM204.xml"
+REDRAGON_PRESET_DIR = CONFIG_DIR / "redragon-light-presets"
+REDRAGON_LIGHT_MODES = [
+    {"name": "Fixo", "english": "Steady", "mode": 5, "lang": 902, "attribute": 49},
+    {"name": "Respiracao", "english": "Breathing", "mode": 6, "lang": 903, "attribute": 67},
+    {"name": "Fluxo", "english": "Flowing light", "mode": 1, "lang": 901, "attribute": 7},
+    {"name": "Neon", "english": "Neon", "mode": 2, "lang": 905, "attribute": 3},
+    {"name": "Corrida", "english": "Horse Racing", "mode": 3, "lang": 908, "attribute": 71},
+    {"name": "Respiracao misturada", "english": "Mixed color breathing", "mode": 4, "lang": 913, "attribute": 71},
+    {"name": "Luz desligada", "english": "Light Off", "mode": 7, "lang": 521, "attribute": 0},
+    {"name": "Musica", "english": "Music", "mode": 11, "lang": 911, "attribute": 512, "experimental": True},
+    {"name": "Ambilight", "english": "Ambilight", "mode": 12, "lang": 912, "attribute": 1024, "experimental": True},
+]
+REDRAGON_LIGHT_PRESETS = [
+    ("Fixo branco", "Fixo", "#FFFFFF", 5, 1),
+    ("Fixo vermelho", "Fixo", "#FF0000", 5, 1),
+    ("Fixo verde", "Fixo", "#00FF00", 5, 1),
+    ("Fixo azul", "Fixo", "#006CFF", 5, 1),
+    ("Fixo ciano", "Fixo", "#00E5FF", 5, 1),
+    ("Fixo roxo", "Fixo", "#8B5CF6", 5, 1),
+    ("Fixo rosa", "Fixo", "#FF4FD8", 5, 1),
+    ("Fixo amarelo", "Fixo", "#FFD000", 5, 1),
+    ("Respirar azul", "Respiracao", "#006CFF", 4, 2),
+    ("Respirar vermelho", "Respiracao", "#FF0000", 4, 2),
+    ("Respirar roxo", "Respiracao", "#8B5CF6", 4, 2),
+    ("Fluxo RGB", "Fluxo", "RGB", 5, 2),
+    ("Neon RGB", "Neon", "RGB", 5, 2),
+    ("Corrida RGB", "Corrida", "RGB", 5, 2),
+    ("Respiracao misturada RGB", "Respiracao misturada", "RGB", 5, 2),
+    ("Apagar luz", "Luz desligada", "OFF", 0, 0),
+    ("Musica experimental", "Musica", "RGB", 5, 2),
+    ("Ambilight experimental", "Ambilight", "RGB", 5, 2),
+]
 MINECRAFT_BACKUP_ITEMS = [
     "saves",
     "mods",
@@ -379,6 +419,35 @@ def network_diagnostics():
     return "\n\n".join(parts)
 
 
+def bluetooth_diagnostics():
+    return "\n\n".join([
+        "=== Servicos Bluetooth ===",
+        run_powershell("Get-Service bthserv,BluetoothUserService* -ErrorAction SilentlyContinue | Select-Object Name,DisplayName,Status,StartType | Format-Table -AutoSize"),
+        "=== Dispositivos Bluetooth ===",
+        run_powershell("Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Select-Object Status,FriendlyName,InstanceId | Format-Table -AutoSize"),
+        "=== Dispositivos de audio ===",
+        run_powershell("Get-PnpDevice -Class Media -ErrorAction SilentlyContinue | Select-Object Status,FriendlyName,InstanceId | Format-Table -AutoSize"),
+    ])
+
+
+def restart_bluetooth_services():
+    command = (
+        "Get-Service bthserv,BluetoothUserService* -ErrorAction SilentlyContinue | "
+        "Restart-Service -Force -ErrorAction SilentlyContinue; "
+        "Get-Service bthserv,BluetoothUserService* -ErrorAction SilentlyContinue | "
+        "Select-Object Name,DisplayName,Status | Format-Table -AutoSize"
+    )
+    return run_powershell(command, timeout=120)
+
+
+def restart_audio_services():
+    command = (
+        "Restart-Service Audiosrv,AudioEndpointBuilder -Force -ErrorAction SilentlyContinue; "
+        "Get-Service Audiosrv,AudioEndpointBuilder | Select-Object Name,DisplayName,Status | Format-Table -AutoSize"
+    )
+    return run_powershell(command, timeout=120)
+
+
 def timestamp():
     return dt.datetime.now().strftime("%Y%m%d-%H%M%S")
 
@@ -537,17 +606,362 @@ def open_parent_select_file(path):
     return f"Arquivo nao encontrado: {target}"
 
 
+def load_local_icon(path, size=(18, 18)):
+    try:
+        path = Path(path)
+        if path.exists():
+            return ctk.CTkImage(Image.open(path), size=size)
+    except Exception:
+        return None
+    return None
+
+
+def redragon_light_report():
+    if not REDRAGON_LAYOUT.exists():
+        return f"Layout nao encontrado:\n{REDRAGON_LAYOUT}"
+    try:
+        text = REDRAGON_LAYOUT.read_text(encoding="utf-8", errors="ignore")
+    except Exception as exc:
+        return f"Erro lendo layout: {exc}"
+
+    official_modes = []
+    experimental_modes = []
+    for mode in REDRAGON_LIGHT_MODES:
+        marker = "experimental" if mode.get("experimental") else "oficial"
+        item = (
+            f"- {mode['name']} ({mode['english']}) | modo {mode['mode']} | "
+            f"idioma {mode['lang']} | atributo {mode['attribute']} | {marker}"
+        )
+        if mode.get("experimental"):
+            experimental_modes.append(item)
+        else:
+            official_modes.append(item)
+
+    lines = [
+        "Redragon M602P-KS / Griffin Pro",
+        f"Software: {REDRAGON_EXE}",
+        "",
+        "Modos mapeados no Tweaks:",
+        *official_modes,
+        "",
+        "Modos encontrados no idioma/layout, mas comentados no layout:",
+        *experimental_modes,
+        "",
+        "Resumo extraido do layout:",
+    ]
+    for line in text.splitlines():
+        cleaned = line.strip()
+        if cleaned.startswith("<light") or cleaned.startswith("<info"):
+            lines.append(cleaned)
+    lines.append("")
+    lines.append("Obs: isso mostra modos/limites da interface. Aplicar cor direto no mouse ainda depende do protocolo HID do software.")
+    return "\n".join(lines)
+
+
+def redragon_mode_by_name(mode_name):
+    for mode in REDRAGON_LIGHT_MODES:
+        if mode["name"] == mode_name:
+            return mode
+    return None
+
+
+def create_redragon_light_preset(preset_name, mode_name, color, brightness, speed):
+    mode = redragon_mode_by_name(mode_name)
+    if not mode:
+        return f"Modo nao encontrado: {mode_name}"
+
+    REDRAGON_PRESET_DIR.mkdir(parents=True, exist_ok=True)
+    safe_name = "".join(ch if ch.isalnum() else "-" for ch in preset_name.lower()).strip("-")
+    preset_file = REDRAGON_PRESET_DIR / f"{safe_name}.json"
+    preset = {
+        "mouse": "Redragon Griffin Pro M602P-KS",
+        "preset": preset_name,
+        "mode": mode,
+        "color": color,
+        "brightness_0_to_5": brightness,
+        "speed_0_to_2": speed,
+        "created_at": dt.datetime.now().isoformat(timespec="seconds"),
+        "status": "recipe-only",
+        "note": (
+            "Este preset documenta o modo para aplicar no software Redragon. "
+            "O envio direto ao mouse ainda depende de descobrir o arquivo/protocolo HID usado pelo DeviceDriver.exe."
+        ),
+    }
+    preset_file.write_text(json.dumps(preset, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    if REDRAGON_EXE.exists():
+        try:
+            os.startfile(str(REDRAGON_EXE))
+        except Exception:
+            pass
+
+    experimental = "\nAviso: este modo e experimental no layout do mouse." if mode.get("experimental") else ""
+    return (
+        f"Preset criado:\n{preset_file}\n\n"
+        f"Modo: {preset_name}\n"
+        f"Tipo: {mode['name']} ({mode['english']})\n"
+        f"Codigo interno: modo {mode['mode']}, atributo {mode['attribute']}\n"
+        f"Cor: {color}\n"
+        f"Brilho: {brightness}/5\n"
+        f"Velocidade: {speed}/2"
+        f"{experimental}\n\n"
+        "Abri o software Redragon para voce aplicar esse visual por enquanto."
+    )
+
+
+def open_redragon_preset_folder():
+    REDRAGON_PRESET_DIR.mkdir(parents=True, exist_ok=True)
+    return open_target(str(REDRAGON_PRESET_DIR))
+
+
+def backup_redragon_files():
+    if not REDRAGON_DIR.exists():
+        return f"Pasta Redragon nao encontrada:\n{REDRAGON_DIR}"
+    return zip_existing_items(
+        "redragon-m602pks",
+        REDRAGON_DIR,
+        ["config.xml", "layouts", "language"],
+    )
+
+
+def restart_redragon_software():
+    command = (
+        "taskkill /f /im DeviceDriver.exe >nul 2>&1 & "
+        f"start \"\" \"{REDRAGON_EXE}\""
+    )
+    return run_command(command, shell=True, timeout=120)
+
+
+class PhysicalMonitor(ctypes.Structure):
+    _fields_ = [
+        ("handle", wintypes.HANDLE),
+        ("description", wintypes.WCHAR * 128),
+    ]
+
+
+def iter_physical_monitors():
+    user32 = ctypes.windll.user32
+    dxva2 = ctypes.windll.dxva2
+    monitors = []
+
+    monitor_enum_proc = ctypes.WINFUNCTYPE(
+        wintypes.BOOL,
+        wintypes.HMONITOR,
+        wintypes.HDC,
+        ctypes.POINTER(wintypes.RECT),
+        wintypes.LPARAM,
+    )
+
+    def callback(hmonitor, hdc, rect, data):
+        count = wintypes.DWORD()
+        if not dxva2.GetNumberOfPhysicalMonitorsFromHMONITOR(hmonitor, ctypes.byref(count)):
+            return True
+        if count.value == 0:
+            return True
+
+        array_type = PhysicalMonitor * count.value
+        physicals = array_type()
+        if dxva2.GetPhysicalMonitorsFromHMONITOR(hmonitor, count, physicals):
+            for monitor in physicals:
+                monitors.append((monitor.handle, monitor.description))
+        return True
+
+    user32.EnumDisplayMonitors(None, None, monitor_enum_proc(callback), 0)
+    return monitors
+
+
+def monitor_brightness_report():
+    dxva2 = ctypes.windll.dxva2
+    monitors = iter_physical_monitors()
+    if not monitors:
+        return "Nenhum monitor fisico encontrado via DDC/CI."
+
+    lines = []
+    handles = []
+    for handle, description in monitors:
+        handles.append(handle)
+        minimum = wintypes.DWORD()
+        current = wintypes.DWORD()
+        maximum = wintypes.DWORD()
+        ok = dxva2.GetMonitorBrightness(handle, ctypes.byref(minimum), ctypes.byref(current), ctypes.byref(maximum))
+        if ok:
+            percent = round(((current.value - minimum.value) / max(1, maximum.value - minimum.value)) * 100)
+            lines.append(f"{description}: brilho {percent}% (valor {current.value}, faixa {minimum.value}-{maximum.value})")
+        else:
+            lines.append(f"{description}: sem controle de brilho via DDC/CI.")
+
+    if handles:
+        array_type = wintypes.HANDLE * len(handles)
+        dxva2.DestroyPhysicalMonitors(len(handles), array_type(*handles))
+    return "\n".join(lines)
+
+
+def set_monitor_brightness(percent):
+    dxva2 = ctypes.windll.dxva2
+    percent = max(0, min(100, int(percent)))
+    monitors = iter_physical_monitors()
+    if not monitors:
+        return "Nenhum monitor fisico encontrado via DDC/CI."
+
+    lines = []
+    handles = []
+    for handle, description in monitors:
+        handles.append(handle)
+        minimum = wintypes.DWORD()
+        current = wintypes.DWORD()
+        maximum = wintypes.DWORD()
+        if not dxva2.GetMonitorBrightness(handle, ctypes.byref(minimum), ctypes.byref(current), ctypes.byref(maximum)):
+            lines.append(f"{description}: sem controle de brilho via DDC/CI.")
+            continue
+
+        value = int(minimum.value + ((maximum.value - minimum.value) * percent / 100))
+        if dxva2.SetMonitorBrightness(handle, value):
+            lines.append(f"{description}: brilho ajustado para {percent}%")
+        else:
+            lines.append(f"{description}: falhou ao ajustar brilho.")
+
+    if handles:
+        array_type = wintypes.HANDLE * len(handles)
+        dxva2.DestroyPhysicalMonitors(len(handles), array_type(*handles))
+    return "\n".join(lines)
+
+
+VCP_CONTROLS = {
+    0x10: "Luz de fundo / Luminancia",
+    0x12: "Contraste",
+    0x14: "Preset de cor selecionado",
+    0x16: "Ganho vermelho",
+    0x18: "Ganho verde",
+    0x1A: "Ganho azul",
+    0x52: "Preset de cor ativo",
+    0x54: "Temperatura de cor",
+    0x60: "Fonte de entrada",
+    0x62: "Volume",
+    0x6C: "Nivel preto vermelho",
+    0x6E: "Nivel preto verde",
+    0x70: "Nivel preto azul",
+    0x87: "Nitidez",
+    0x8A: "Saturacao",
+    0x8D: "Mute audio",
+    0x90: "Matiz",
+    0x92: "Nivel de preto",
+    0xD6: "Modo energia",
+}
+
+
+def vcp_report():
+    dxva2 = ctypes.windll.dxva2
+    monitors = iter_physical_monitors()
+    if not monitors:
+        return "Nenhum monitor fisico encontrado via DDC/CI."
+
+    lines = []
+    handles = []
+    for handle, description in monitors:
+        handles.append(handle)
+        lines.append(f"=== {description} ===")
+        for code, name in VCP_CONTROLS.items():
+            code_type = wintypes.DWORD()
+            current = wintypes.DWORD()
+            maximum = wintypes.DWORD()
+            ok = dxva2.GetVCPFeatureAndVCPFeatureReply(
+                handle,
+                ctypes.c_ubyte(code),
+                ctypes.byref(code_type),
+                ctypes.byref(current),
+                ctypes.byref(maximum),
+            )
+            if ok:
+                lines.append(f"{name} (0x{code:02X}): atual {current.value}, max {maximum.value}")
+            else:
+                lines.append(f"{name} (0x{code:02X}): nao suportado/sem resposta")
+
+    if handles:
+        array_type = wintypes.HANDLE * len(handles)
+        dxva2.DestroyPhysicalMonitors(len(handles), array_type(*handles))
+    return "\n".join(lines)
+
+
+def set_vcp_percent(code, percent):
+    dxva2 = ctypes.windll.dxva2
+    percent = max(0, min(100, int(percent)))
+    monitors = iter_physical_monitors()
+    if not monitors:
+        return "Nenhum monitor fisico encontrado via DDC/CI."
+
+    lines = []
+    handles = []
+    for handle, description in monitors:
+        handles.append(handle)
+        code_type = wintypes.DWORD()
+        current = wintypes.DWORD()
+        maximum = wintypes.DWORD()
+        ok = dxva2.GetVCPFeatureAndVCPFeatureReply(
+            handle,
+            ctypes.c_ubyte(code),
+            ctypes.byref(code_type),
+            ctypes.byref(current),
+            ctypes.byref(maximum),
+        )
+        if not ok or maximum.value == 0:
+            lines.append(f"{description}: controle 0x{code:02X} sem suporte/resposta.")
+            continue
+
+        value = int(maximum.value * percent / 100)
+        if dxva2.SetVCPFeature(handle, ctypes.c_ubyte(code), wintypes.DWORD(value)):
+            lines.append(f"{description}: {VCP_CONTROLS.get(code, hex(code))} ajustado para {percent}% (valor {value})")
+        else:
+            lines.append(f"{description}: falhou ao ajustar controle 0x{code:02X}.")
+
+    if handles:
+        array_type = wintypes.HANDLE * len(handles)
+        dxva2.DestroyPhysicalMonitors(len(handles), array_type(*handles))
+    return "\n".join(lines)
+
+
+def set_vcp_value(code, value):
+    dxva2 = ctypes.windll.dxva2
+    monitors = iter_physical_monitors()
+    if not monitors:
+        return "Nenhum monitor fisico encontrado via DDC/CI."
+
+    lines = []
+    handles = []
+    for handle, description in monitors:
+        handles.append(handle)
+        if dxva2.SetVCPFeature(handle, ctypes.c_ubyte(code), wintypes.DWORD(int(value))):
+            lines.append(f"{description}: {VCP_CONTROLS.get(code, hex(code))} definido como valor {value}")
+        else:
+            lines.append(f"{description}: falhou ao definir controle 0x{code:02X} como {value}.")
+
+    if handles:
+        array_type = wintypes.HANDLE * len(handles)
+        dxva2.DestroyPhysicalMonitors(len(handles), array_type(*handles))
+    return "\n".join(lines)
+
+
+def set_rgb_gain(percent):
+    parts = []
+    for code in (0x16, 0x18, 0x1A):
+        parts.append(set_vcp_percent(code, percent))
+    return "\n\n".join(parts)
+
+
 def confirm(title, text):
     return messagebox.askyesno(title, text)
 
 
-class TweaksApp(tk.Tk):
+class TweaksApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title(APP_TITLE)
         self.geometry("1180x760")
         self.minsize(780, 540)
         self.configure(bg=BG)
+        self.overrideredirect(True)
+        self._drag_start = None
+        self._normal_geometry = None
+        self._is_maximized = False
         self._set_icon()
         self._apply_theme()
 
@@ -565,6 +979,8 @@ class TweaksApp(tk.Tk):
                 pass
 
     def _apply_theme(self):
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
         self.style = ttk.Style(self)
         try:
             self.style.theme_use("clam")
@@ -619,76 +1035,144 @@ class TweaksApp(tk.Tk):
         self.style.configure("Vertical.TScrollbar", background=PANEL_2, troughcolor=BG, arrowcolor=TEXT)
 
     def _build_ui(self):
-        header = ttk.Frame(self, padding=(16, 12, 16, 6))
-        header.pack(fill="x")
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
 
-        title = ttk.Label(header, text=APP_TITLE, style="Title.TLabel")
-        title.pack(side="left")
+        self.titlebar = ctk.CTkFrame(self, height=38, fg_color="#171717", corner_radius=0)
+        self.titlebar.grid(row=0, column=0, sticky="ew")
+        self.titlebar.grid_columnconfigure(1, weight=1)
+        self.titlebar.bind("<Button-1>", self._start_drag)
+        self.titlebar.bind("<B1-Motion>", self._drag_window)
 
-        admin_text = "Rodando como administrador" if is_admin() else "Sem administrador"
-        admin = ttk.Label(header, text=admin_text, style="Muted.TLabel")
-        admin.pack(side="right")
-
-        main = ttk.Frame(self, padding=(14, 8, 14, 8))
-        main.pack(fill="both", expand=True)
-
-        shell = ttk.Frame(main)
-        shell.pack(fill="both", expand=True)
-
-        sidebar = ttk.Frame(shell, style="Sidebar.TFrame", padding=(10, 10, 10, 10), width=190)
-        sidebar.pack(side="left", fill="y", padx=(0, 10))
-        sidebar.pack_propagate(False)
-
-        ttk.Label(sidebar, text="MENU", style="SidebarTitle.TLabel").pack(anchor="w", pady=(0, 2))
-        ttk.Label(sidebar, text="rotinas e ferramentas", style="SidebarMuted.TLabel").pack(anchor="w", pady=(0, 10))
-
-        self.nav_list = tk.Listbox(
-            sidebar,
-            activestyle="none",
-            bg=SIDEBAR,
-            fg=TEXT,
-            selectbackground="#0ea5e9",
-            selectforeground="#ffffff",
-            highlightthickness=1,
-            highlightbackground="#1e293b",
-            highlightcolor=ACCENT,
-            borderwidth=0,
-            relief="flat",
-            font=("Segoe UI", 10, "bold"),
-            exportselection=False,
+        title = ctk.CTkLabel(
+            self.titlebar,
+            text="  " + APP_TITLE,
+            font=("Segoe UI", 12, "bold"),
+            text_color=TEXT,
         )
-        self.nav_list.pack(fill="both", expand=True)
-        self.nav_list.bind("<<ListboxSelect>>", self._on_nav_select)
+        title.grid(row=0, column=0, sticky="w", padx=(10, 0))
+        title.bind("<Button-1>", self._start_drag)
+        title.bind("<B1-Motion>", self._drag_window)
 
-        right = ttk.Frame(shell)
-        right.pack(side="left", fill="both", expand=True)
+        admin_text = "Administrador" if is_admin() else "Sem admin"
+        ctk.CTkLabel(
+            self.titlebar,
+            text=admin_text,
+            font=("Segoe UI", 10),
+            text_color=MUTED,
+        ).grid(row=0, column=1, sticky="e", padx=(0, 12))
+
+        for col, (text, command, hover) in enumerate([
+            ("-", self._minimize_window, "#2a2a2a"),
+            ("□", self._toggle_maximize, "#2a2a2a"),
+            ("×", self.destroy, "#7f1d1d"),
+        ], start=2):
+            ctk.CTkButton(
+                self.titlebar,
+                text=text,
+                width=40,
+                height=28,
+                corner_radius=8,
+                fg_color="transparent",
+                hover_color=hover,
+                text_color=TEXT,
+                font=("Segoe UI", 14),
+                command=command,
+            ).grid(row=0, column=col, padx=(0, 4), pady=4)
+
+        shell = ctk.CTkFrame(self, fg_color=BG, corner_radius=0)
+        shell.grid(row=1, column=0, sticky="nsew", padx=12, pady=(10, 10))
+        shell.grid_columnconfigure(1, weight=1)
+        shell.grid_rowconfigure(0, weight=1)
+
+        sidebar = ctk.CTkFrame(shell, width=220, fg_color="#111111", corner_radius=18)
+        sidebar.grid(row=0, column=0, sticky="ns", padx=(0, 12))
+        sidebar.grid_propagate(False)
+        sidebar.grid_rowconfigure(2, weight=1)
+
+        ctk.CTkLabel(
+            sidebar,
+            text="Tweaks",
+            font=("Segoe UI", 18, "bold"),
+            text_color=TEXT,
+        ).grid(row=0, column=0, sticky="w", padx=18, pady=(18, 0))
+        ctk.CTkLabel(
+            sidebar,
+            text="GuiPaluch",
+            font=("Segoe UI", 11),
+            text_color=MUTED,
+        ).grid(row=1, column=0, sticky="w", padx=18, pady=(0, 14))
+
+        self.nav_frame = ctk.CTkScrollableFrame(sidebar, fg_color="transparent", corner_radius=0)
+        self.nav_frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=(0, 10))
+
+        right = ctk.CTkFrame(shell, fg_color=BG, corner_radius=0)
+        right.grid(row=0, column=1, sticky="nsew")
+        right.grid_columnconfigure(0, weight=1)
+        right.grid_rowconfigure(0, weight=1)
 
         self.pages = {}
+        self.nav_buttons = {}
+        self.nav_images = []
         self.current_page = None
-        self.content_area = ttk.Frame(right, style="Panel.TFrame")
-        self.content_area.pack(fill="both", expand=True)
+        self.content_area = ctk.CTkFrame(right, fg_color=PANEL, corner_radius=18)
+        self.content_area.grid(row=0, column=0, sticky="nsew")
+        self.content_area.grid_columnconfigure(0, weight=1)
+        self.content_area.grid_rowconfigure(0, weight=1)
 
-        self.log = scrolledtext.ScrolledText(
+        self.log = ctk.CTkTextbox(
             right,
-            wrap="word",
-            height=8,
-            font=("Consolas", 10),
-            bg="#020617",
-            fg=TEXT,
-            insertbackground=TEXT,
-            relief="flat",
-            borderwidth=0,
+            height=126,
+            corner_radius=18,
+            fg_color="#050816",
+            border_width=1,
+            border_color="#1f2937",
+            text_color=TEXT,
+            font=("Cascadia Mono", 10),
         )
-        self.log.pack(fill="both", expand=False, pady=(10, 0))
+        self.log.grid(row=1, column=0, sticky="ew", pady=(10, 0))
         self.log.insert("end", "Logs aparecerao aqui.\n")
 
-        status = ttk.Label(self, textvariable=self.status_var, padding=(16, 7), style="Muted.TLabel")
-        status.pack(fill="x")
+        status = ctk.CTkLabel(
+            self,
+            textvariable=self.status_var,
+            font=("Segoe UI", 10),
+            text_color=MUTED,
+            anchor="w",
+        )
+        status.grid(row=2, column=0, sticky="ew", padx=16, pady=(0, 8))
 
         self._add_sections()
         if self.pages:
             first_page = next(iter(self.pages))
             self._show_page(first_page)
+
+    def _start_drag(self, event):
+        self._drag_start = (event.x_root, event.y_root, self.winfo_x(), self.winfo_y())
+
+    def _drag_window(self, event):
+        if not self._drag_start or self._is_maximized:
+            return
+        start_x, start_y, win_x, win_y = self._drag_start
+        self.geometry(f"+{win_x + event.x_root - start_x}+{win_y + event.y_root - start_y}")
+
+    def _minimize_window(self):
+        self.overrideredirect(False)
+        self.iconify()
+        self.after(150, lambda: self.overrideredirect(True))
+
+    def _toggle_maximize(self):
+        if self._is_maximized:
+            if self._normal_geometry:
+                self.geometry(self._normal_geometry)
+            self._is_maximized = False
+            return
+
+        self._normal_geometry = self.geometry()
+        width = self.winfo_screenwidth()
+        height = self.winfo_screenheight() - 40
+        self.geometry(f"{width}x{height}+0+0")
+        self._is_maximized = True
 
     def _add_sections(self):
         cleanup = self._tab("Limpeza")
@@ -727,6 +1211,126 @@ class TweaksApp(tk.Tk):
             ("Diagnostico Miracast/Wi-Fi", lambda: self.run_task(miracast_diagnostics)),
             ("Diagnostico de internet", lambda: self.run_task(network_diagnostics)),
             ("Resetar rede", self.reset_network),
+        ])
+
+        display = self._tab("Tela")
+        self._section(display, "Monitor DDC/CI", [
+            ("Relatorio DDC/CI completo", lambda: self.run_task(vcp_report)),
+            ("Luz atual / luminancia", lambda: self.run_task(monitor_brightness_report)),
+        ])
+        self._section(display, "Luz de fundo / luminancia", [
+            ("Luz de fundo 20%", lambda: self.run_task(set_vcp_percent, 0x10, 20)),
+            ("Luz de fundo 40%", lambda: self.run_task(set_vcp_percent, 0x10, 40)),
+            ("Luz de fundo 60%", lambda: self.run_task(set_vcp_percent, 0x10, 60)),
+            ("Luz de fundo 80%", lambda: self.run_task(set_vcp_percent, 0x10, 80)),
+            ("Luz de fundo 100%", lambda: self.run_task(set_vcp_percent, 0x10, 100)),
+        ])
+        self._section(display, "Contraste / nitidez / cor", [
+            ("Contraste 40%", lambda: self.run_task(set_vcp_percent, 0x12, 40)),
+            ("Contraste 50%", lambda: self.run_task(set_vcp_percent, 0x12, 50)),
+            ("Contraste 60%", lambda: self.run_task(set_vcp_percent, 0x12, 60)),
+            ("Contraste 80%", lambda: self.run_task(set_vcp_percent, 0x12, 80)),
+            ("Contraste 100%", lambda: self.run_task(set_vcp_percent, 0x12, 100)),
+            ("Nitidez 25%", lambda: self.run_task(set_vcp_percent, 0x87, 25)),
+            ("Nitidez 50%", lambda: self.run_task(set_vcp_percent, 0x87, 50)),
+            ("Nitidez 75%", lambda: self.run_task(set_vcp_percent, 0x87, 75)),
+            ("Saturacao 25%", lambda: self.run_task(set_vcp_percent, 0x8A, 25)),
+            ("Saturacao 50%", lambda: self.run_task(set_vcp_percent, 0x8A, 50)),
+            ("Saturacao 75%", lambda: self.run_task(set_vcp_percent, 0x8A, 75)),
+            ("Matiz 25%", lambda: self.run_task(set_vcp_percent, 0x90, 25)),
+            ("Matiz 50%", lambda: self.run_task(set_vcp_percent, 0x90, 50)),
+            ("Matiz 75%", lambda: self.run_task(set_vcp_percent, 0x90, 75)),
+            ("Nivel de preto 25%", lambda: self.run_task(set_vcp_percent, 0x92, 25)),
+            ("Nivel de preto 50%", lambda: self.run_task(set_vcp_percent, 0x92, 50)),
+            ("Nivel de preto 75%", lambda: self.run_task(set_vcp_percent, 0x92, 75)),
+        ])
+        self._section(display, "Ganhos RGB / temperatura", [
+            ("RGB ganho 40%", lambda: self.run_task(set_rgb_gain, 40)),
+            ("RGB ganho 50%", lambda: self.run_task(set_rgb_gain, 50)),
+            ("RGB ganho 60%", lambda: self.run_task(set_rgb_gain, 60)),
+            ("RGB ganho 80%", lambda: self.run_task(set_rgb_gain, 80)),
+            ("Vermelho 50%", lambda: self.run_task(set_vcp_percent, 0x16, 50)),
+            ("Verde 50%", lambda: self.run_task(set_vcp_percent, 0x18, 50)),
+            ("Azul 50%", lambda: self.run_task(set_vcp_percent, 0x1A, 50)),
+            ("Preset cor 6500K", lambda: self.run_task(set_vcp_value, 0x14, 5)),
+            ("Preset cor 9300K", lambda: self.run_task(set_vcp_value, 0x14, 8)),
+            ("Preset cor usuario", lambda: self.run_task(set_vcp_value, 0x14, 11)),
+        ])
+        self._section(display, "Nivel preto RGB", [
+            ("Preto vermelho 40%", lambda: self.run_task(set_vcp_percent, 0x6C, 40)),
+            ("Preto vermelho 50%", lambda: self.run_task(set_vcp_percent, 0x6C, 50)),
+            ("Preto vermelho 60%", lambda: self.run_task(set_vcp_percent, 0x6C, 60)),
+            ("Preto verde 40%", lambda: self.run_task(set_vcp_percent, 0x6E, 40)),
+            ("Preto verde 50%", lambda: self.run_task(set_vcp_percent, 0x6E, 50)),
+            ("Preto verde 60%", lambda: self.run_task(set_vcp_percent, 0x6E, 60)),
+            ("Preto azul 40%", lambda: self.run_task(set_vcp_percent, 0x70, 40)),
+            ("Preto azul 50%", lambda: self.run_task(set_vcp_percent, 0x70, 50)),
+            ("Preto azul 60%", lambda: self.run_task(set_vcp_percent, 0x70, 60)),
+        ])
+        self._section(display, "Audio do monitor / energia", [
+            ("Volume monitor 0%", lambda: self.run_task(set_vcp_percent, 0x62, 0)),
+            ("Volume monitor 25%", lambda: self.run_task(set_vcp_percent, 0x62, 25)),
+            ("Volume monitor 50%", lambda: self.run_task(set_vcp_percent, 0x62, 50)),
+            ("Volume monitor 100%", lambda: self.run_task(set_vcp_percent, 0x62, 100)),
+            ("Mute audio monitor", lambda: self.run_task(set_vcp_value, 0x8D, 1)),
+            ("Desmutar audio monitor", lambda: self.run_task(set_vcp_value, 0x8D, 2)),
+        ])
+        self._section(display, "Windows / HDR / Projecao", [
+            ("Configuracoes de tela", lambda: self.run_task(open_target, "ms-settings:display")),
+            ("HDR do Windows", lambda: self.run_task(open_target, "ms-settings:display-advancedgraphics")),
+            ("Luz noturna", lambda: self.run_task(open_target, "ms-settings:nightlight")),
+            ("Abrir Win+P / projetar", lambda: self.run_task(open_target, "DisplaySwitch.exe")),
+        ])
+
+        bluetooth = self._tab("Bluetooth")
+        self._section(bluetooth, "Conexao e audio Bluetooth", [
+            ("Abrir Bluetooth", lambda: self.run_task(open_target, "ms-settings:bluetooth")),
+            ("Adicionar dispositivo", lambda: self.run_task(open_target, "ms-settings:bluetooth")),
+            ("Dispositivos conectados", lambda: self.run_task(open_target, "ms-settings:connecteddevices")),
+            ("Config de som", lambda: self.run_task(open_target, "ms-settings:sound")),
+            ("Painel de sons classico", lambda: self.run_task(open_target, "mmsys.cpl")),
+            ("Diagnostico Bluetooth", lambda: self.run_task(bluetooth_diagnostics)),
+            ("Reset Bluetooth", self.confirm_restart_bluetooth),
+            ("Reset audio Windows", self.confirm_restart_audio),
+            ("Gerenciador de Dispositivos", lambda: self.run_task(open_target, "devmgmt.msc")),
+            ("Servicos do Windows", lambda: self.run_task(open_target, "services.msc")),
+        ])
+
+        redragon = self._tab("Redragon")
+        self._section(redragon, "Mouse Griffin Pro M602P-KS", [
+            ("Abrir software Redragon", lambda: self.run_task(open_target, str(REDRAGON_EXE))),
+            ("Reiniciar software Redragon", lambda: self.run_task(restart_redragon_software)),
+            ("Abrir pasta do software", lambda: self.run_task(open_target, str(REDRAGON_DIR))),
+            ("Abrir config.xml", lambda: self.run_task(open_target, str(REDRAGON_CONFIG))),
+            ("Abrir layout MOUSE_DM204", lambda: self.run_task(open_target, str(REDRAGON_LAYOUT))),
+            ("Relatorio de luz/modos", lambda: self.run_task(redragon_light_report)),
+            ("Backup configs Redragon", lambda: self.run_task(backup_redragon_files)),
+            ("Site Redragon", lambda: self.run_task(open_target, "https://www.redragon.com.br/")),
+        ])
+        self._section(redragon, "Modos de luz oficiais", [
+            ("Fixo / Steady", lambda: self.run_task(create_redragon_light_preset, "Fixo branco", "Fixo", "#FFFFFF", 5, 1)),
+            ("Respiracao / Breathing", lambda: self.run_task(create_redragon_light_preset, "Respirar azul", "Respiracao", "#006CFF", 4, 2)),
+            ("Fluxo / Flowing light", lambda: self.run_task(create_redragon_light_preset, "Fluxo RGB", "Fluxo", "RGB", 5, 2)),
+            ("Neon", lambda: self.run_task(create_redragon_light_preset, "Neon RGB", "Neon", "RGB", 5, 2)),
+            ("Corrida / Horse Racing", lambda: self.run_task(create_redragon_light_preset, "Corrida RGB", "Corrida", "RGB", 5, 2)),
+            ("Respiracao misturada", lambda: self.run_task(create_redragon_light_preset, "Respiracao misturada RGB", "Respiracao misturada", "RGB", 5, 2)),
+            ("Desligar luz", lambda: self.run_task(create_redragon_light_preset, "Apagar luz", "Luz desligada", "OFF", 0, 0)),
+        ])
+        self._section(redragon, "Cores prontas", [
+            ("Branco fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo branco", "Fixo", "#FFFFFF", 5, 1)),
+            ("Vermelho fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo vermelho", "Fixo", "#FF0000", 5, 1)),
+            ("Verde fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo verde", "Fixo", "#00FF00", 5, 1)),
+            ("Azul fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo azul", "Fixo", "#006CFF", 5, 1)),
+            ("Ciano fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo ciano", "Fixo", "#00E5FF", 5, 1)),
+            ("Roxo fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo roxo", "Fixo", "#8B5CF6", 5, 1)),
+            ("Rosa fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo rosa", "Fixo", "#FF4FD8", 5, 1)),
+            ("Amarelo fixo", lambda: self.run_task(create_redragon_light_preset, "Fixo amarelo", "Fixo", "#FFD000", 5, 1)),
+        ])
+        self._section(redragon, "Modos experimentais do layout", [
+            ("Musica / Music", lambda: self.run_task(create_redragon_light_preset, "Musica experimental", "Musica", "RGB", 5, 2)),
+            ("Ambilight", lambda: self.run_task(create_redragon_light_preset, "Ambilight experimental", "Ambilight", "RGB", 5, 2)),
+            ("Abrir pasta de presets", lambda: self.run_task(open_redragon_preset_folder)),
+            ("Relatorio completo", lambda: self.run_task(redragon_light_report)),
         ])
 
         folders = self._tab("Pastas")
@@ -906,96 +1510,114 @@ class TweaksApp(tk.Tk):
         ])
 
     def _tab(self, title):
-        outer = ttk.Frame(self.content_area, padding=0, style="Panel.TFrame")
+        outer = ctk.CTkScrollableFrame(
+            self.content_area,
+            fg_color=PANEL,
+            corner_radius=18,
+            scrollbar_button_color="#2b3448",
+            scrollbar_button_hover_color="#3b465c",
+        )
         self.pages[title] = outer
-        self.nav_list.insert("end", "  " + title)
 
-        canvas = tk.Canvas(outer, highlightthickness=0, bg=PANEL)
-        scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
-        inner = ttk.Frame(canvas, padding=14, style="Panel.TFrame")
-        window_id = canvas.create_window((0, 0), window=inner, anchor="nw")
-
-        def resize(event):
-            canvas.itemconfigure(window_id, width=event.width)
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        def on_mousewheel(event):
-            if event.delta:
-                canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-            else:
-                direction = 1 if event.num == 5 else -1
-                canvas.yview_scroll(direction, "units")
-
-        def bind_mousewheel(event):
-            canvas.bind_all("<MouseWheel>", on_mousewheel)
-            canvas.bind_all("<Button-4>", on_mousewheel)
-            canvas.bind_all("<Button-5>", on_mousewheel)
-
-        def unbind_mousewheel(event):
-            canvas.unbind_all("<MouseWheel>")
-            canvas.unbind_all("<Button-4>")
-            canvas.unbind_all("<Button-5>")
-
-        inner.bind("<Configure>", lambda event: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.bind("<Configure>", resize)
-        canvas.bind("<Enter>", bind_mousewheel)
-        canvas.bind("<Leave>", unbind_mousewheel)
-        inner.bind("<Enter>", bind_mousewheel)
-        inner.bind("<Leave>", unbind_mousewheel)
-        inner._scroll_canvas = canvas
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        return inner
-
-    def _on_nav_select(self, event):
-        selection = self.nav_list.curselection()
-        if not selection:
-            return
-        raw_title = self.nav_list.get(selection[0])
-        self._show_page(raw_title.strip())
+        icons = {
+            "Limpeza": "⌁",
+            "Seguranca": "◈",
+            "Rede": "⌘",
+            "Tela": "◐",
+            "Bluetooth": "⌁",
+            "Redragon": "▰",
+            "Pastas": "▣",
+            "Reparo": "◇",
+            "Sistema": "⚙",
+            "Meu PC": "▰",
+            "Jogos": "▶",
+            "Downloads": "↓",
+            "Minecraft": "■",
+            "Pos-formatacao": "✓",
+            "Presets": "✦",
+        }
+        icon_files = {
+            "Limpeza": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_brightness_up.png",
+            "Seguranca": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_config.png",
+            "Rede": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_pc.png",
+            "Tela": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_brightness_up.png",
+            "Bluetooth": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_bluetooth.png",
+            "Redragon": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_mouse.png",
+            "Pastas": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_file.png",
+            "Reparo": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_config.png",
+            "Sistema": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_pc.png",
+            "Meu PC": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_pc.png",
+            "Jogos": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_playpause.png",
+            "Downloads": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_file.png",
+            "Minecraft": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_customlayout.png",
+            "Pos-formatacao": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_cal.png",
+            "Presets": REDRAGON_DIR / "skins" / "theme1" / "icon" / "icon_lightmode.png",
+        }
+        nav_text = f"{icons.get(title, '•')}  {title}"
+        image = load_local_icon(icon_files.get(title))
+        if image:
+            self.nav_images.append(image)
+            nav_text = title
+        button = ctk.CTkButton(
+            self.nav_frame,
+            text=nav_text,
+            image=image,
+            compound="left",
+            anchor="w",
+            height=38,
+            corner_radius=12,
+            fg_color="transparent",
+            hover_color="#242424",
+            text_color=TEXT,
+            font=("Segoe UI", 12),
+            command=lambda page=title: self._show_page(page),
+        )
+        button.pack(fill="x", padx=2, pady=4)
+        self.nav_buttons[title] = button
+        return outer
 
     def _show_page(self, title):
         if title not in self.pages:
             return
         if self.current_page:
-            self.pages[self.current_page].pack_forget()
-        self.pages[title].pack(fill="both", expand=True)
+            self.pages[self.current_page].grid_remove()
+            self.nav_buttons[self.current_page].configure(fg_color="transparent", text_color=TEXT)
+        self.pages[title].grid(row=0, column=0, sticky="nsew", padx=14, pady=14)
         self.current_page = title
-
-        for index in range(self.nav_list.size()):
-            if self.nav_list.get(index).strip() == title:
-                self.nav_list.selection_clear(0, "end")
-                self.nav_list.selection_set(index)
-                self.nav_list.activate(index)
-                break
+        self.nav_buttons[title].configure(fg_color="#242424", text_color="#ffffff")
 
     def _section(self, parent, title, buttons):
-        label = ttk.Label(parent, text=title, style="Section.TLabel")
-        label.pack(fill="x", pady=(6, 10))
+        section = ctk.CTkFrame(parent, fg_color="#151515", corner_radius=18)
+        section.pack(fill="x", padx=4, pady=(4, 14))
+        section.grid_columnconfigure(0, weight=1)
 
-        grid = ttk.Frame(parent, style="Panel.TFrame")
-        grid.pack(fill="x")
-        scroll_canvas = getattr(parent, "_scroll_canvas", None)
+        label = ctk.CTkLabel(
+            section,
+            text=title,
+            anchor="w",
+            font=("Segoe UI", 13, "bold"),
+            text_color="#d4d4d4",
+        )
+        label.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 8))
 
-        def on_mousewheel(event):
-            if not scroll_canvas:
-                return
-            if event.delta:
-                scroll_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-            else:
-                direction = 1 if event.num == 5 else -1
-                scroll_canvas.yview_scroll(direction, "units")
-
-        if scroll_canvas:
-            label.bind("<MouseWheel>", on_mousewheel)
-            grid.bind("<MouseWheel>", on_mousewheel)
+        grid = ctk.CTkFrame(section, fg_color="transparent")
+        grid.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 12))
 
         button_widgets = []
         for index, (text, command) in enumerate(buttons):
-            button = ttk.Button(grid, text=text, command=command)
-            if scroll_canvas:
-                button.bind("<MouseWheel>", on_mousewheel)
+            button = ctk.CTkButton(
+                grid,
+                text=text,
+                command=command,
+                height=42,
+                corner_radius=14,
+                fg_color="#242424",
+                hover_color="#303030",
+                border_width=1,
+                border_color="#333333",
+                text_color=TEXT,
+                font=("Segoe UI", 11),
+            )
             button_widgets.append(button)
 
         def layout(event=None):
@@ -1016,7 +1638,7 @@ class TweaksApp(tk.Tk):
             for index, button in enumerate(button_widgets):
                 row = index // columns
                 col = index % columns
-                button.grid(row=row, column=col, sticky="ew", padx=5, pady=5)
+                button.grid(row=row, column=col, sticky="ew", padx=6, pady=6)
 
         grid.bind("<Configure>", layout)
         self.after(50, layout)
@@ -1114,6 +1736,14 @@ class TweaksApp(tk.Tk):
     def reset_network(self):
         if confirm("Resetar rede", "Isso pode exigir reiniciar o PC depois. Deseja continuar?"):
             self.run_task(run_command, "netsh winsock reset & netsh int ip reset", True, 300)
+
+    def confirm_restart_bluetooth(self):
+        if confirm("Reset Bluetooth", "Reiniciar servicos Bluetooth? Seus dispositivos podem desconectar e reconectar."):
+            self.run_task(restart_bluetooth_services)
+
+    def confirm_restart_audio(self):
+        if confirm("Reset audio", "Reiniciar servicos de audio do Windows? O som pode cortar por alguns segundos."):
+            self.run_task(restart_audio_services)
 
     def sfc_scan(self):
         self.run_task(run_command, ["sfc", "/scannow"], False, 7200)
